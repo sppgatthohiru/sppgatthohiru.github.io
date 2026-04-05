@@ -1,558 +1,28 @@
-/* ==================== RESET & VARIABLES ==================== */
-:root {
-  --primary: #059669;
-  --primary-dark: #047857;
-  --primary-light: #10b981;
-  --primary-bg: #ecfdf5;
-  --secondary: #f59e0b;
-  --danger: #ef4444;
-  --danger-bg: #fef2f2;
-  --success: #22c55e;
-  --success-bg: #f0fdf4;
-  --warning: #f59e0b;
-  --warning-bg: #fffbeb;
-  --info: #3b82f6;
-  --info-bg: #eff6ff;
-  --gray-50: #f9fafb;
-  --gray-100: #f3f4f6;
-  --gray-200: #e5e7eb;
-  --gray-300: #d1d5db;
-  --gray-400: #9ca3af;
-  --gray-500: #6b7280;
-  --gray-600: #4b5563;
-  --gray-700: #374151;
-  --gray-800: #1f2937;
-  --gray-900: #111827;
-  --sidebar-bg: #064e3b;
-  --sidebar-hover: #065f46;
-  --sidebar-active: #059669;
-  --card-shadow: 0 1px 3px rgba(0,0,0,0.1), 0 1px 2px rgba(0,0,0,0.06);
-  --card-shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
-  --transition: all 0.2s ease;
+/* ============================================================
+   CUSTOM UTILITIES (yang tidak tersedia di Tailwind)
+   ============================================================ */
+
+/* Custom Scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
 }
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
-body {
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  background: linear-gradient(135deg, #f0f9f4 0%, #e8f5e9 100%);
-  height: 100vh;
-  overflow: hidden;
-  color: var(--gray-800);
-}
-
-/* ==================== SCROLLBAR ==================== */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: var(--gray-100);
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #e5e7eb;
   border-radius: 10px;
 }
 
-::-webkit-scrollbar-thumb {
-  background: var(--gray-400);
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #9ca3af;
   border-radius: 10px;
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: var(--gray-500);
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #6b7280;
 }
 
-/* ==================== APP CONTAINER ==================== */
-.app-container {
-  display: flex;
-  height: 100vh;
-  overflow: hidden;
-}
-
-/* ==================== SIDEBAR ==================== */
-.sidebar {
-  width: 280px;
-  background: linear-gradient(180deg, var(--sidebar-bg) 0%, #052e1f 100%);
-  color: white;
-  display: flex;
-  flex-direction: column;
-  box-shadow: 4px 0 20px rgba(0,0,0,0.1);
-  position: relative;
-  z-index: 10;
-}
-
-.sidebar-header {
-  padding: 28px 24px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  border-bottom: 1px solid rgba(255,255,255,0.1);
-  margin-bottom: 20px;
-}
-
-.logo-icon {
-  width: 45px;
-  height: 45px;
-  background: rgba(255,255,255,0.15);
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.logo-icon i {
-  font-size: 24px;
-  color: #4ade80;
-}
-
-.logo-text h1 {
-  font-size: 20px;
-  font-weight: 700;
-  letter-spacing: -0.5px;
-}
-
-.logo-text p {
-  font-size: 11px;
-  opacity: 0.7;
-  margin-top: 2px;
-}
-
-.sidebar-nav {
-  flex: 1;
-  padding: 0 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.nav-item {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 12px 16px;
-  color: rgba(255,255,255,0.8);
-  text-decoration: none;
-  font-size: 14px;
-  font-weight: 500;
-  border-radius: 12px;
-  transition: var(--transition);
-}
-
-.nav-item i {
-  width: 22px;
-  font-size: 18px;
-  text-align: center;
-}
-
-.nav-item:hover {
-  background-color: var(--sidebar-hover);
-  color: white;
-}
-
-.nav-item.active {
-  background-color: var(--sidebar-active);
-  color: white;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-}
-
-.nav-item.active i {
-  color: white;
-}
-
-.sidebar-footer {
-  padding: 20px 24px;
-  border-top: 1px solid rgba(255,255,255,0.1);
-  margin-top: auto;
-}
-
-.user-info {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 10px;
-}
-
-.user-info i {
-  font-size: 20px;
-  opacity: 0.8;
-}
-
-.user-info span {
-  font-size: 13px;
-  font-weight: 500;
-}
-
-.copyright {
-  font-size: 11px;
-  opacity: 0.5;
-}
-
-/* ==================== MAIN CONTENT ==================== */
-.main-content {
-  flex: 1;
-  overflow-y: auto;
-  padding: 28px 32px;
-}
-
-.content-wrapper {
-  max-width: 1400px;
-  margin: 0 auto;
-}
-
-/* ==================== TYPOGRAPHY ==================== */
-h1, h2, h3 {
-  color: var(--gray-800);
-}
-
-h1 {
-  font-size: 28px;
-  font-weight: 700;
-  letter-spacing: -0.5px;
-  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-h2 {
-  font-size: 22px;
-  font-weight: 600;
-  margin-bottom: 24px;
-}
-
-h3 {
-  font-size: 16px;
-  font-weight: 600;
-  margin-bottom: 16px;
-  color: var(--gray-700);
-}
-
-/* ==================== CARDS ==================== */
-.card {
-  background: white;
-  border-radius: 20px;
-  padding: 24px;
-  box-shadow: var(--card-shadow);
-  transition: var(--transition);
-  border: 1px solid rgba(0,0,0,0.05);
-}
-
-.card:hover {
-  box-shadow: var(--card-shadow-lg);
-}
-
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-  padding-bottom: 12px;
-  border-bottom: 2px solid var(--gray-100);
-}
-
-.card-title {
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--gray-800);
-}
-
-.card-title i {
-  color: var(--primary);
-  margin-right: 8px;
-}
-
-/* ==================== DASHBOARD GRID ==================== */
-.dashboard-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 24px;
-  margin-bottom: 32px;
-}
-
-.dash-card {
-  background: white;
-  border-radius: 24px;
-  padding: 24px;
-  text-align: center;
-  transition: var(--transition);
-  border: 1px solid rgba(0,0,0,0.05);
-  position: relative;
-  overflow: hidden;
-}
-
-.dash-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 4px;
-  background: linear-gradient(90deg, var(--primary), var(--primary-light));
-}
-
-.dash-card:hover {
-  transform: translateY(-4px);
-  box-shadow: var(--card-shadow-lg);
-}
-
-.dash-card h3 {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--gray-500);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: 16px;
-}
-
-.dash-value {
-  font-size: 42px;
-  font-weight: 800;
-  margin: 8px 0;
-  background: linear-gradient(135deg, var(--gray-800) 0%, var(--gray-600) 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-.dash-value.normal {
-  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-.dash-value.low {
-  background: linear-gradient(135deg, var(--danger) 0%, #dc2626 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-.dash-card small {
-  font-size: 12px;
-  color: var(--gray-400);
-}
-
-/* ==================== BUTTONS ==================== */
-button {
-  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
-  color: white;
-  border: none;
-  padding: 12px 24px;
-  border-radius: 12px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: var(--transition);
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-}
-
-button:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(5, 150, 105, 0.3);
-}
-
-button:active {
-  transform: translateY(0);
-}
-
-button.btn-outline {
-  background: transparent;
-  border: 2px solid var(--primary);
-  color: var(--primary);
-}
-
-button.btn-outline:hover {
-  background: var(--primary);
-  color: white;
-}
-
-button.btn-danger {
-  background: linear-gradient(135deg, var(--danger) 0%, #dc2626 100%);
-}
-
-/* ==================== FORM ELEMENTS ==================== */
-input, select, textarea {
-  width: 100%;
-  padding: 12px 16px;
-  border: 1.5px solid var(--gray-200);
-  border-radius: 12px;
-  font-size: 14px;
-  transition: var(--transition);
-  background: white;
-}
-
-input:focus, select:focus, textarea:focus {
-  outline: none;
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.1);
-}
-
-label {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--gray-600);
-  margin-bottom: 6px;
-  display: block;
-}
-
-/* ==================== TABLES ==================== */
-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-th, td {
-  padding: 14px 16px;
-  text-align: left;
-  border-bottom: 1px solid var(--gray-200);
-}
-
-th {
-  background-color: var(--gray-50);
-  font-weight: 600;
-  font-size: 13px;
-  color: var(--gray-600);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-tr:hover {
-  background-color: var(--gray-50);
-}
-
-.low-stock {
-  color: var(--danger);
-  font-weight: 700;
-}
-
-/* ==================== GRID SYSTEM ==================== */
-.grid {
-  display: grid;
-  gap: 20px;
-}
-
-.grid-cols-1 { grid-template-columns: 1fr; }
-.grid-cols-2 { grid-template-columns: repeat(2, 1fr); }
-.grid-cols-3 { grid-template-columns: repeat(3, 1fr); }
-.grid-cols-4 { grid-template-columns: repeat(4, 1fr); }
-.grid-cols-5 { grid-template-columns: repeat(5, 1fr); }
-
-@media (max-width: 1024px) {
-  .grid-cols-3, .grid-cols-4, .grid-cols-5 {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-@media (max-width: 768px) {
-  .grid-cols-2, .grid-cols-3, .grid-cols-4, .grid-cols-5 {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* ==================== SPACING ==================== */
-.mt-1 { margin-top: 4px; }
-.mt-2 { margin-top: 8px; }
-.mt-3 { margin-top: 12px; }
-.mt-4 { margin-top: 16px; }
-.mt-5 { margin-top: 20px; }
-.mt-6 { margin-top: 24px; }
-.mt-8 { margin-top: 32px; }
-.mb-1 { margin-bottom: 4px; }
-.mb-2 { margin-bottom: 8px; }
-.mb-3 { margin-bottom: 12px; }
-.mb-4 { margin-bottom: 16px; }
-.mb-5 { margin-bottom: 20px; }
-.mb-6 { margin-bottom: 24px; }
-.mb-8 { margin-bottom: 32px; }
-
-/* ==================== ALERTS & BADGES ==================== */
-.alert {
-  padding: 14px 18px;
-  border-radius: 12px;
-  margin-bottom: 20px;
-  font-size: 14px;
-}
-
-.alert-success {
-  background: var(--success-bg);
-  color: #166534;
-  border-left: 4px solid var(--success);
-}
-
-.alert-warning {
-  background: var(--warning-bg);
-  color: #92400e;
-  border-left: 4px solid var(--warning);
-}
-
-.alert-danger {
-  background: var(--danger-bg);
-  color: #991b1b;
-  border-left: 4px solid var(--danger);
-}
-
-.badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 4px 10px;
-  border-radius: 20px;
-  font-size: 11px;
-  font-weight: 600;
-}
-
-.badge-success {
-  background: var(--success-bg);
-  color: #166534;
-}
-
-.badge-danger {
-  background: var(--danger-bg);
-  color: #991b1b;
-}
-
-/* ==================== RESPONSIVE ==================== */
-@media (max-width: 768px) {
-  .sidebar {
-    width: 80px;
-  }
-  
-  .sidebar-header .logo-text,
-  .nav-item span,
-  .sidebar-footer .user-info span,
-  .copyright {
-    display: none;
-  }
-  
-  .sidebar-header {
-    justify-content: center;
-    padding: 20px;
-  }
-  
-  .nav-item {
-    justify-content: center;
-    padding: 14px;
-  }
-  
-  .nav-item i {
-    margin: 0;
-    font-size: 22px;
-  }
-  
-  .main-content {
-    padding: 20px;
-  }
-  
-  .dashboard-grid {
-    grid-template-columns: 1fr;
-    gap: 16px;
-  }
-}
-
-/* ==================== ANIMATIONS ==================== */
+/* Fade In Animation */
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -564,154 +34,87 @@ tr:hover {
   }
 }
 
-.card, .dash-card {
+.animate-fadeIn {
   animation: fadeIn 0.3s ease-out;
 }
 
-/* ==================== PRINT BUTTONS ==================== */
-.print-buttons {
-  display: flex;
-  gap: 15px;
-  margin-bottom: 30px;
-  flex-wrap: wrap;
+/* Hide Scrollbar (tetapi tetap bisa scroll) */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
 }
 
-.btn-print-organoleptik {
-  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
-.btn-print-berita {
-  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+/* Transition smooth untuk hover effects */
+.transition-smooth {
+  transition: all 0.2s ease-in-out;
 }
 
-.btn-print-organoleptik:hover,
-.btn-print-berita:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-}
-/* ==================== NAVIGATION DIVIDER ==================== */
-.nav-divider {
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
-  margin: 16px 20px;
+/* ============================================================
+   OVERRIDE DAISYUI (jika diperlukan)
+   ============================================================ */
+
+/* Memastikan text gradient bekerja dengan baik */
+.text-gradient {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
-/* ==================== PRINT MENU SECTION ==================== */
-.print-menu {
-  margin-top: 8px;
-  margin-bottom: 8px;
+/* Custom shadow untuk card */
+.shadow-card {
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1), 0 1px 2px rgba(0,0,0,0.06);
 }
 
-.print-menu-label {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 8px 20px;
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  color: rgba(255,255,255,0.5);
+.shadow-card-lg {
+  box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
 }
 
-.print-menu-label i {
-  font-size: 12px;
-}
+/* ============================================================
+   RESPONSIVE UTILITIES (jika diperlukan)
+   ============================================================ */
 
-.nav-item.print-item {
-  margin-top: 2px;
-  margin-bottom: 2px;
-  background: rgba(255,255,255,0.05);
-}
-
-.nav-item.print-item:hover {
-  background: rgba(139, 92, 246, 0.2);
-}
-
-.nav-item.print-item:first-of-type:hover {
-  background: rgba(139, 92, 246, 0.2);
-}
-
-.nav-item.print-item:last-of-type:hover {
-  background: rgba(245, 158, 11, 0.2);
-}
-
-/* Icon khusus untuk print items */
-.nav-item.print-item i {
-  font-size: 16px;
-}
-
-.nav-item.print-item:first-of-type i {
-  color: #a78bfa;
-}
-
-.nav-item.print-item:last-of-type i {
-  color: #fbbf24;
-}
-
-/* Active state untuk print items (tidak berubah seperti menu biasa) */
-.nav-item.print-item.active {
-  background: rgba(139, 92, 246, 0.3);
-}
-
-/* ==================== RESPONSIVE untuk Sidebar Collapse ==================== */
+/* Untuk sidebar collapse di mobile - akan dihandle oleh JS */
 @media (max-width: 768px) {
-  .print-menu-label span {
+  .sidebar-collapsed {
+    width: 80px !important;
+  }
+  
+  .sidebar-collapsed .sidebar-text {
     display: none;
   }
   
-  .print-menu-label {
+  .sidebar-collapsed .sidebar-header {
     justify-content: center;
-    padding: 8px 0;
+    padding: 20px 12px;
   }
   
-  .nav-divider {
-    margin: 16px 12px;
+  .sidebar-collapsed .nav-item {
+    justify-content: center;
+    padding: 12px;
+  }
+  
+  .sidebar-collapsed .nav-item i {
+    margin: 0;
+    font-size: 20px;
   }
 }
-/* Dokumentasi Menu Styles */
-.dokumentasi-menu {
-  padding: 16px 20px;
-  margin-top: 8px;
+
+/* Gradient Text Utilities */
+.text-gradient {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
-.dokumentasi-label {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 8px 12px;
-  margin-bottom: 12px;
-  font-size: 12px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--gray-500);
-}
-
-.dokumentasi-label i {
-  font-size: 14px;
-  width: 20px;
-  color: var(--primary);
-}
-
-.dokumentasi-item {
-  padding-left: 44px !important;
-  font-size: 13px !important;
-}
-
-.dokumentasi-item i {
-  width: 20px;
-  font-size: 13px;
-  color: var(--gray-500);
-}
-
-.dokumentasi-item:hover i {
-  color: var(--primary);
-}
-
-/* Nav Divider */
-.nav-divider {
-  height: 1px;
-  background: linear-gradient(90deg, transparent, var(--gray-200), transparent);
-  margin: 8px 20px;
+.text-gradient-orange {
+  background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
