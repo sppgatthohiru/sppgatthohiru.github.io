@@ -85,8 +85,17 @@ export function formatDate(date, format = 'full') {
 // GET TODAY ISO DATE (YYYY-MM-DD)
 // ============================================================
 export function getTodayISO() {
-  const today = new Date();
-  return today.toISOString().slice(0, 10);
+  const now = new Date();
+  
+  // Konversi ke waktu lokal dengan benar
+  const offset = now.getTimezoneOffset() * 60000; // offset dalam milidetik
+  const localTime = new Date(now.getTime() - offset);
+  
+  const year = localTime.getUTCFullYear();
+  const month = String(localTime.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(localTime.getUTCDate()).padStart(2, '0');
+  
+  return `${year}-${month}-${day}`;
 }
 
 // ============================================================

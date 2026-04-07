@@ -3,9 +3,9 @@
 // Theme: Professional Blue - Clean & Modern
 // Version: 3.2 (Updated: Daily Data Checklist instead of Relawan Summary)
 // ============================================================
-
-import { ref, onValue, get, set } from "https://www.gstatic.com/firebasejs/11.7.0/firebase-database.js";
+import { ref, onValue, get, set, push } from "https://www.gstatic.com/firebasejs/11.7.0/firebase-database.js";
 import { db, stokRef, sisaPengRef, omprengRef, absensiRef } from "./firebase-init.js";
+const historyRef = ref(db, 'stok_history');
 import { googleDocsLinks } from "./config.js";
 import { showToast, getTodayISO, escapeHtml } from "./utils.js";
 
@@ -22,6 +22,12 @@ let historyIndex = -1;
 let lowStockAlertShown = false;
 let currentMetric = 'sisa';
 let currentRandomStoks = [];
+
+// ============================================================
+// HISTORY FIREBASE
+// ============================================================
+let changeHistory = [];           // Array riwayat dari Firebase
+let currentFilterDate = null;     // null = tampilkan semua tanggal
 
 // Filter chart variables
 let currentChartDays = 7;
@@ -371,6 +377,41 @@ export function loadDashboard() {
         </div>
       </div>
     </div>
+    <!-- ==================== RIWAYAT PERUBAHAN (FIREBASE + FILTER) ==================== -->
+    <div class="card bg-white shadow-md border border-slate-100 mb-6">
+      <div class="card-body p-4">
+        <div class="flex justify-between items-center mb-3 flex-wrap gap-3">
+          <div class="flex items-center gap-2">
+            <div class="w-7 h-7 bg-primary/10 rounded-lg flex items-center justify-center">
+              <i class="fas fa-history text-primary text-sm"></i>
+            </div>
+            <h3 class="font-semibold text-slate-700 text-sm">Riwayat Perubahan Stok</h3>
+          </div>
+
+          <!-- FILTER TANGGAL -->
+          <div class="flex items-center gap-2 flex-wrap">
+            <input type="date" id="historyDateFilter" 
+                   class="input input-bordered input-sm w-36">
+            <button onclick="window.filterHistoryByDate()" 
+                    class="btn btn-primary btn-sm gap-1">
+              <i class="fas fa-filter"></i> Filter
+            </button>
+            <button onclick="window.showAllHistory()" 
+                    class="btn btn-ghost btn-sm">
+              Semua Tanggal
+            </button>
+            <button onclick="window.clearHistory()" 
+                    class="btn btn-ghost btn-xs text-slate-400 hover:text-error">
+              <i class="fas fa-trash-alt"></i>
+            </button>
+          </div>
+        </div>
+
+        <div id="historyTimeline" class="max-h-96 overflow-y-auto custom-scrollbar pr-2">
+          <!-- Timeline diisi otomatis oleh JS -->
+        </div>
+      </div>
+    </div>
 
     <!-- ==================== CHARTS SECTION ==================== -->
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-6">
@@ -488,12 +529,15 @@ export function initDashboard() {
   initNotes();
   checkBrowserNotification();
   loadStokOperasionalList();
+  loadHistoryFromFirebase();
   
   // Update checklist setiap 30 detik
   setInterval(() => {
     updateDailyDataChecklist();
     updateStockPrediction();
+    setInterval(() => { 3000 });
   }, 30000);
+  
 }
 
 export function updateDashboard() {
@@ -976,9 +1020,14 @@ window.saveStockEditFromDashboard = async function(nama) {
   try {
     const snapshot = await get(ref(db, 'stok_operasional/' + key));
     const kategori = snapshot.exists() ? snapshot.val().kategori : 'Barang Lainnya';
-    
+    const stokLama = snapshot.exists() ? snapshot.val().stok || 0 : 0;
+   
     await set(ref(db, 'stok_operasional/' + key), { nama, stok: newStock, kategori });
-    
+
+    // === SIMPAN RIWAYAT KE FIREBASE (BARU) ===
+    saveChangeToHistory('Edit Manual', nama, stokLama, newStock);
+    // =========================================
+   
     showToast(`✅ Stok "${nama}" diubah menjadi ${newStock}`, 2000, 'success');
     window.closeEditStockModal();
     loadStokOperasionalList();
@@ -1539,6 +1588,11 @@ export async function editListrik() {
   
   try {
     await set(ref(db, 'stok_operasional/LISTRIK'), { nama: "LISTRIK", stok: nilaiBaru });
+
+    // === SIMPAN RIWAYAT KE FIREBASE (BARU) ===
+    const stokLama = document.getElementById('listrik').textContent || 0;
+    saveChangeToHistory('Update Listrik', 'Listrik', stokLama, nilaiBaru);
+    // =========================================
     document.getElementById('listrik').textContent = nilaiBaru;
     inputListrik.value = '';
     showToast(`⚡ Listrik diupdate menjadi ${nilaiBaru} kWh`, 2000, 'success');
@@ -1557,8 +1611,13 @@ export async function editStok(namaKey, perubahan) {
     let namaAsli = snapshot.exists() ? snapshot.val().nama : namaKey.replace(/_/g, ' ');
     const stokBaru = Math.max(0, stokSekarang + perubahan);
     
-    await set(ref(db, 'stok_operasional/' + namaKey), { nama: namaAsli, stok: stokBaru });
-    
+        await set(ref(db, 'stok_operasional/' + namaKey), { nama: namaAsli, stok: stokBaru });
+
+    // === SIMPAN RIWAYAT KE FIREBASE (BARU) ===
+    const action = perubahan > 0 ? 'Penambahan Stok' : 'Pengurangan Stok';
+    saveChangeToHistory(action, namaAsli, stokSekarang, stokBaru);
+    // =========================================
+
     const elementId = namaKey === "GAS_LPG_50KG" ? "lpg50" : namaKey === "GAS_LPG_12KG" ? "lpg12" : "galon";
     const element = document.getElementById(elementId);
     if (element) element.textContent = stokBaru;
@@ -1597,3 +1656,113 @@ function updateTimestamp() {
     timestampEl.innerHTML = `<i class="far fa-clock"></i> Terakhir update: ${new Date().toLocaleTimeString('id-ID')}`;
   }
 }
+// ============================================================
+// SECTION 20: RIWAYAT PERUBAHAN FIREBASE + FILTER TANGGAL
+// ============================================================
+
+// Load riwayat dari Firebase (real-time)
+function loadHistoryFromFirebase() {
+  onValue(historyRef, (snapshot) => {
+    const data = snapshot.val() || {};
+    changeHistory = Object.values(data)
+      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)); // terbaru dulu
+
+    renderHistoryTimeline(); // render dengan filter saat ini
+  });
+}
+
+// Simpan perubahan ke Firebase
+function saveChangeToHistory(action, itemName, oldValue, newValue, changedBy = "Admin") {
+  const historyItem = {
+    id: Date.now(),
+    timestamp: new Date().toISOString(),
+    tanggalISO: getTodayISO(),           // untuk filter cepat
+    action: action,
+    item: itemName,
+    oldValue: Number(oldValue),
+    newValue: Number(newValue),
+    diff: Number(newValue) - Number(oldValue),
+    changedBy: changedBy
+  };
+
+  push(historyRef, historyItem); // push otomatis buat unique key
+}
+
+// Render Timeline Daisy UI
+function renderHistoryTimeline() {
+  const container = document.getElementById('historyTimeline');
+  if (!container) return;
+
+  // Filter berdasarkan tanggal yang dipilih
+  let filtered = changeHistory;
+  if (currentFilterDate) {
+    filtered = changeHistory.filter(item => 
+      item.tanggalISO === currentFilterDate
+    );
+  }
+
+  if (filtered.length === 0) {
+    container.innerHTML = `
+      <div class="text-center py-12 text-slate-400">
+        <i class="fas fa-history text-4xl mb-3 opacity-30"></i>
+        <p class="text-sm">Belum ada riwayat perubahan${currentFilterDate ? ' pada tanggal ini' : ''}</p>
+      </div>`;
+    return;
+  }
+
+  let html = `<ul class="timeline timeline-vertical timeline-compact">`;
+
+  filtered.forEach((item, index) => {
+    const date = new Date(item.timestamp);
+    const timeStr = date.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+    const dateStr = date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
+
+    const isPositive = item.diff > 0;
+    const diffText = item.diff > 0 ? `+${item.diff}` : item.diff;
+
+    html += `
+      <li>
+        ${index !== 0 ? '<hr class="bg-slate-200">' : ''}
+        <div class="timeline-start text-xs text-slate-500">${dateStr}<br>${timeStr}</div>
+        <div class="timeline-middle">
+          <div class="w-5 h-5 rounded-full border-2 border-primary bg-white flex items-center justify-center text-[10px]">
+            <i class="fas fa-${isPositive ? 'plus' : 'minus'} text-primary"></i>
+          </div>
+        </div>
+        <div class="timeline-end">
+          <div class="text-sm font-medium">${escapeHtml(item.item)}</div>
+          <div class="text-xs text-slate-500">${item.action}</div>
+          <div class="text-xs mt-1">
+            ${item.oldValue} → 
+            <span class="font-semibold ${isPositive ? 'text-success' : 'text-error'}">
+              ${item.newValue}
+            </span>
+            <span class="ml-1 text-[10px] ${isPositive ? 'text-success' : 'text-error'}">(${diffText})</span>
+          </div>
+        </div>
+      </li>`;
+  });
+
+  html += `</ul>`;
+  container.innerHTML = html;
+}
+
+// Filter functions (dipanggil dari button HTML)
+window.filterHistoryByDate = function() {
+  const input = document.getElementById('historyDateFilter').value;
+  currentFilterDate = input ? input : null;
+  renderHistoryTimeline();
+};
+
+window.showAllHistory = function() {
+  currentFilterDate = null;
+  document.getElementById('historyDateFilter').value = '';
+  renderHistoryTimeline();
+};
+
+window.clearHistory = async function() {
+  if (confirm('⚠️ Hapus SEMUA riwayat perubahan di Firebase?\nTindakan ini tidak dapat dibatalkan!')) {
+    await set(historyRef, null);
+    showToast('Riwayat berhasil dihapus', 2000, 'success');
+  }
+};

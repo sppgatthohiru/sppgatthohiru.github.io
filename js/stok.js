@@ -1,17 +1,20 @@
 // ============================================================
 // STOK.JS - Halaman Manajemen Stok Operasional
 // ============================================================
-import { ref, onValue, set, get } from "https://www.gstatic.com/firebasejs/11.7.0/firebase-database.js";
+import { ref, onValue, set, get, push } from "https://www.gstatic.com/firebasejs/11.7.0/firebase-database.js";
 import { db, stokRef } from "./firebase-init.js";
 import { kategoriBarang, getCategoryIcon } from "./data.js";
 import { updateDashboard } from "./dashboard.js";
-import { showToast, escapeHtml } from "./utils.js";
+import { showToast, escapeHtml, getTodayISO } from "./utils.js";
 
 // ============================================================
 // GLOBAL VARIABLES
 // ============================================================
 let currentPage = 'dashboard';
 let activeFilters = {};
+
+// Reference untuk riwayat perubahan stok
+const historyRef = ref(db, 'stok_history');
 
 // ============================================================
 // LOAD STOK PAGE HTML
@@ -93,9 +96,9 @@ export function setCurrentPage(page) {
 }
 
 // ============================================================
-// SIMPAN STOK
+// SIMPAN STOK (Tambah / Kurangi)
 // ============================================================
-window.simpanStok = function() {
+window.simpanStok = async function() {   // ← Ubah jadi async
   const nama = document.getElementById('namaBarangBaru').value.trim();
   const jenis = document.getElementById('jenisStok').value;
   let jumlah = parseFloat(document.getElementById('jumlahStok').value);
@@ -112,7 +115,8 @@ window.simpanStok = function() {
 
   const key = nama.replace(/[^a-zA-Z0-9]/g, '_');
 
-  onValue(ref(db, 'stok_operasional/' + key), (snap) => {
+  try {
+    const snap = await get(ref(db, 'stok_operasional/' + key));  // ← pakai get agar lebih bersih
     let stokSekarang = snap.exists() ? snap.val().stok : 0;
     let kategoriSekarang = snap.exists() ? snap.val().kategori : null;
     
@@ -137,15 +141,73 @@ window.simpanStok = function() {
       }
     }
 
-    set(ref(db, 'stok_operasional/' + key), { nama, stok: stokBaru, kategori });
+    // Simpan stok baru
+    await set(ref(db, 'stok_operasional/' + key), { nama, stok: stokBaru, kategori });
+
+    // === SIMPAN RIWAYAT PERUBAHAN ===
+    const action = (jumlah >= 0) ? 'Penambahan Stok' : 'Pengurangan Stok';
+    saveChangeToHistory(action, nama, stokSekarang, stokBaru);
+    // =================================
+
     showToast(`✅ Stok "${nama}" berhasil diupdate menjadi ${stokBaru}`, 2000, 'success');
 
+    // Reset form
     document.getElementById('namaBarangBaru').value = '';
     document.getElementById('jumlahStok').value = '';
 
     loadStokWithCategories();
     if (currentPage === 'dashboard' && typeof updateDashboard === 'function') updateDashboard();
-  }, { onlyOnce: true });
+
+  } catch (error) {
+    console.error("Error simpan stok:", error);
+    showToast('Gagal menyimpan stok!', 3000, 'error');
+  }
+};
+
+// ============================================================
+// EDIT STOK DIRECT (Double Click)
+// ============================================================
+window.saveStockEditDirect = async function(nama) {
+  const newStock = parseFloat(document.getElementById('editStockValue').value);
+  if (isNaN(newStock) || newStock < 0) {
+    showToast('Masukkan jumlah yang valid (minimal 0)!', 3000, 'error');
+    return;
+  }
+  
+  const key = nama.replace(/[^a-zA-Z0-9]/g, '_');
+  
+  try {
+    const snapshot = await get(ref(db, 'stok_operasional/' + key));
+    const stokLama = snapshot.exists() ? snapshot.val().stok || 0 : 0;
+    let kategori = snapshot.exists() ? snapshot.val().kategori : null;
+    
+    if (!kategori) {
+      let found = false;
+      for (const [cat, items] of Object.entries(kategoriBarang)) {
+        if (items.includes(nama)) { kategori = cat; found = true; break; }
+      }
+      if (!found) {
+        kategori = "Barang Lainnya";
+        if (!kategoriBarang["Barang Lainnya"].includes(nama)) kategoriBarang["Barang Lainnya"].push(nama);
+      }
+    }
+    
+    await set(ref(db, 'stok_operasional/' + key), { nama, stok: newStock, kategori });
+
+    // === SIMPAN RIWAYAT PERUBAHAN ===
+    saveChangeToHistory('Edit Manual Stok', nama, stokLama, newStock);
+    // =================================
+
+    showToast(`✅ Stok "${nama}" diubah menjadi ${newStock}`, 2000, 'success');
+    document.getElementById('editStockDirectModal')?.classList.remove('modal-open');
+    
+    loadStokWithCategories();
+    if (currentPage === 'dashboard' && typeof updateDashboard === 'function') updateDashboard();
+
+  } catch (error) {
+    console.error("Error edit stok:", error);
+    showToast('Gagal mengupdate stok', 3000, 'error');
+  }
 };
 
 // ============================================================
@@ -174,7 +236,7 @@ window.resetAllFilters = function() {
 };
 
 // ============================================================
-// EDIT STOCK DIRECT
+// EDIT STOCK DIRECT MODAL
 // ============================================================
 window.editStockDirect = function(nama, currentStock) {
   const existingModal = document.getElementById('editStockDirectModal');
@@ -203,40 +265,6 @@ window.editStockDirect = function(nama, currentStock) {
   `;
   document.body.appendChild(modal);
   setTimeout(() => document.getElementById('editStockValue')?.focus(), 100);
-};
-
-window.saveStockEditDirect = async function(nama) {
-  const newStock = parseFloat(document.getElementById('editStockValue').value);
-  if (isNaN(newStock) || newStock < 0) {
-    showToast('Masukkan jumlah yang valid (minimal 0)!', 3000, 'error');
-    return;
-  }
-  
-  const key = nama.replace(/[^a-zA-Z0-9]/g, '_');
-  
-  try {
-    const snapshot = await get(ref(db, 'stok_operasional/' + key));
-    let kategori = snapshot.exists() ? snapshot.val().kategori : null;
-    
-    if (!kategori) {
-      let found = false;
-      for (const [cat, items] of Object.entries(kategoriBarang)) {
-        if (items.includes(nama)) { kategori = cat; found = true; break; }
-      }
-      if (!found) {
-        kategori = "Barang Lainnya";
-        if (!kategoriBarang["Barang Lainnya"].includes(nama)) kategoriBarang["Barang Lainnya"].push(nama);
-      }
-    }
-    
-    await set(ref(db, 'stok_operasional/' + key), { nama, stok: newStock, kategori });
-    showToast(`✅ Stok "${nama}" diubah menjadi ${newStock}`, 2000, 'success');
-    document.getElementById('editStockDirectModal')?.classList.remove('modal-open');
-    loadStokWithCategories();
-    if (currentPage === 'dashboard' && typeof updateDashboard === 'function') updateDashboard();
-  } catch (error) {
-    showToast('Gagal mengupdate stok', 3000, 'error');
-  }
 };
 
 // ============================================================
@@ -365,4 +393,23 @@ function loadStokWithCategories() {
       `;
     }
   });
+}
+
+// ============================================================
+// RIWAYAT PERUBAHAN STOK - Untuk stok.js
+// ============================================================
+function saveChangeToHistory(action, itemName, oldValue, newValue, changedBy = "Admin") {
+  const historyItem = {
+    id: Date.now(),
+    timestamp: new Date().toISOString(),
+    tanggalISO: getTodayISO(),
+    action: action,
+    item: itemName,
+    oldValue: Number(oldValue),
+    newValue: Number(newValue),
+    diff: Number(newValue) - Number(oldValue),
+    changedBy: changedBy
+  };
+
+  push(historyRef, historyItem);
 }
