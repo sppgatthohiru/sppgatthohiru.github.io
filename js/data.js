@@ -38,7 +38,7 @@ export const kategoriBarang = {
     "Lap Kotak-Kotak Kustom", "Lap Microfiber", "Lap Microfiber Biru",
     "Lap Microfiber Hijau", "Lap Microfiber Kuning", "Lap Microfiber Orange",
     "Lap Microfiber Pink", "Lap Microfiber Towel Roll", "Lap Microfiber Ungu",
-    "Keset Custom", "Folding Hanger Owl Plast"
+    "Keset Custom", "Folding Hanger Owl Plast","Lap Microfiber Abu-Abu","Lap Microfiber Hitam"
   ],
   "Plastik & Kresek": [
     "Plastik JoyoBoyo", "Plastik Merah Mahkota", "Plastik Merah Tiga Gelang",
