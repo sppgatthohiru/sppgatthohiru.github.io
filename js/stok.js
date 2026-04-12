@@ -1,6 +1,5 @@
 // ============================================================
 // STOK.JS - Halaman Manajemen Stok Operasional
-// Updated: Menggunakan window.saveChangeToHistory untuk audit trail
 // ============================================================
 import { ref, onValue, set, get } from "https://www.gstatic.com/firebasejs/11.7.0/firebase-database.js";
 import { db, stokRef } from "./firebase-init.js";
@@ -362,7 +361,14 @@ function loadStokWithCategories() {
                       const isLowStock = item.stok < 5;
                       return `
                         <tr class="cursor-pointer hover:bg-primary/5 transition-colors" ondblclick="window.editStockDirect('${item.nama.replace(/'/g, "\\'")}', ${item.stok})">
-                          <td class="font-medium">${escapeHtml(item.nama)}</td>
+                          <td class="font-medium flex items-center gap-2">
+  ${escapeHtml(item.nama)}
+  <button onclick="event.stopImmediatePropagation(); window.pindahKategori('${item.nama.replace(/'/g, "\\'")}')"
+          class="btn btn-ghost btn-xs text-slate-400 hover:text-primary transition-colors"
+          title="Pindah kategori">
+    <i class="fas fa-exchange-alt"></i>
+  </button>
+</td>
                           <td class="text-right">
                             <span class="badge ${isLowStock ? 'badge-error' : 'badge-success'} badge-md">
                               ${item.stok}
@@ -394,7 +400,108 @@ function loadStokWithCategories() {
     }
   });
 }
+// ============================================================
+// PINDAHKAN KATEGORI BARANG
+// ============================================================
+window.pindahKategori = async function(namaBarang) {
+  const key = namaBarang.replace(/[^a-zA-Z0-9]/g, '_');
 
+  // Ambil data saat ini
+  const snapshot = await get(ref(db, 'stok_operasional/' + key));
+  const currentData = snapshot.exists() ? snapshot.val() : {};
+  const kategoriSekarang = currentData.kategori || "Barang Lainnya";
+
+  // Buat daftar kategori (kecuali kategori saat ini)
+  let options = Object.keys(kategoriBarang)
+    .filter(cat => cat !== kategoriSekarang)
+    .map(cat => `<option value="${cat}">${cat}</option>`)
+    .join('');
+
+  const modal = document.createElement('div');
+  modal.id = 'pindahKategoriModal';
+  modal.className = 'modal modal-open';
+  modal.innerHTML = `
+    <div class="modal-box">
+      <h3 class="font-bold text-lg flex items-center gap-2">
+        <i class="fas fa-exchange-alt text-primary"></i>
+        Pindahkan Kategori
+      </h3>
+      <p class="text-slate-600 mt-2">Barang: <strong>${escapeHtml(namaBarang)}</strong></p>
+      
+      <div class="form-control my-4">
+        <label class="label">
+          <span class="label-text">Pilih Kategori Baru</span>
+        </label>
+        <select id="selectKategoriBaru" class="select select-bordered w-full">
+          <option value="">-- Pilih Kategori --</option>
+          ${options}
+        </select>
+      </div>
+
+      <div class="modal-action">
+        <button class="btn btn-primary" onclick="window.simpanPindahKategori('${namaBarang.replace(/'/g, "\\'")}')">
+          <i class="fas fa-save"></i> Pindahkan
+        </button>
+        <button class="btn btn-ghost" onclick="this.closest('.modal').classList.remove('modal-open')">Batal</button>
+      </div>
+    </div>
+  `;
+
+  // Hapus modal lama jika ada
+  const existing = document.getElementById('pindahKategoriModal');
+  if (existing) existing.remove();
+
+  document.body.appendChild(modal);
+};
+
+// Fungsi simpan perubahan kategori
+window.simpanPindahKategori = async function(namaBarang) {
+  const select = document.getElementById('selectKategoriBaru');
+  const kategoriBaru = select.value;
+
+  if (!kategoriBaru) {
+    showToast('Silakan pilih kategori baru!', 3000, 'error');
+    return;
+  }
+
+  const key = namaBarang.replace(/[^a-zA-Z0-9]/g, '_');
+
+  try {
+    // Update di Firebase
+    await set(ref(db, `stok_operasional/${key}/kategori`), kategoriBaru);
+
+    // Update array kategoriBarang di frontend
+    // Hapus dari kategori lama
+    for (const [cat, items] of Object.entries(kategoriBarang)) {
+      const index = items.indexOf(namaBarang);
+      if (index > -1) {
+        items.splice(index, 1);
+        break;
+      }
+    }
+
+    // Tambahkan ke kategori baru
+    if (!kategoriBarang[kategoriBaru]) {
+      kategoriBarang[kategoriBaru] = [];
+    }
+    if (!kategoriBarang[kategoriBaru].includes(namaBarang)) {
+      kategoriBarang[kategoriBaru].push(namaBarang);
+    }
+
+    showToast(`✅ "${namaBarang}" dipindahkan ke ${kategoriBaru}`, 2500, 'success');
+
+    // Tutup modal
+    const modal = document.getElementById('pindahKategoriModal');
+    if (modal) modal.classList.remove('modal-open');
+
+    // Refresh tampilan
+    loadStokWithCategories();
+
+  } catch (error) {
+    console.error("Error pindah kategori:", error);
+    showToast('Gagal memindahkan kategori!', 3000, 'error');
+  }
+};
 // ============================================================
 // JALANKAN SAAT HALAMAN DIMUAT
 // ============================================================
