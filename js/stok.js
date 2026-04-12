@@ -1,20 +1,24 @@
 // ============================================================
 // STOK.JS - Halaman Manajemen Stok Operasional
+// Updated: Menggunakan window.saveChangeToHistory untuk audit trail
 // ============================================================
-import { ref, onValue, set, get, push } from "https://www.gstatic.com/firebasejs/11.7.0/firebase-database.js";
+import { ref, onValue, set, get } from "https://www.gstatic.com/firebasejs/11.7.0/firebase-database.js";
 import { db, stokRef } from "./firebase-init.js";
 import { kategoriBarang, getCategoryIcon } from "./data.js";
 import { updateDashboard } from "./dashboard.js";
 import { showToast, escapeHtml, getTodayISO } from "./utils.js";
+import { initAuthGuard } from './auth-guard.js';
+
+async function initializePage() {
+  const isLoggedIn = await initAuthGuard();
+  if (!isLoggedIn) return;
+}
 
 // ============================================================
 // GLOBAL VARIABLES
 // ============================================================
 let currentPage = 'dashboard';
 let activeFilters = {};
-
-// Reference untuk riwayat perubahan stok
-const historyRef = ref(db, 'stok_history');
 
 // ============================================================
 // LOAD STOK PAGE HTML
@@ -91,14 +95,10 @@ export function initStok() {
   loadStokWithCategories();
 }
 
-export function setCurrentPage(page) {
-  currentPage = page;
-}
-
 // ============================================================
-// SIMPAN STOK (Tambah / Kurangi)
+// SIMPAN STOK (Tambah / Kurangi) - SUDAH DIUPDATE
 // ============================================================
-window.simpanStok = async function() {   // ← Ubah jadi async
+window.simpanStok = async function() {
   const nama = document.getElementById('namaBarangBaru').value.trim();
   const jenis = document.getElementById('jenisStok').value;
   let jumlah = parseFloat(document.getElementById('jumlahStok').value);
@@ -116,7 +116,7 @@ window.simpanStok = async function() {   // ← Ubah jadi async
   const key = nama.replace(/[^a-zA-Z0-9]/g, '_');
 
   try {
-    const snap = await get(ref(db, 'stok_operasional/' + key));  // ← pakai get agar lebih bersih
+    const snap = await get(ref(db, 'stok_operasional/' + key));
     let stokSekarang = snap.exists() ? snap.val().stok : 0;
     let kategoriSekarang = snap.exists() ? snap.val().kategori : null;
     
@@ -144,10 +144,10 @@ window.simpanStok = async function() {   // ← Ubah jadi async
     // Simpan stok baru
     await set(ref(db, 'stok_operasional/' + key), { nama, stok: stokBaru, kategori });
 
-    // === SIMPAN RIWAYAT PERUBAHAN ===
+    // === CATAT RIWAYAT PERUBAHAN (VERSI BARU) ===
     const action = (jumlah >= 0) ? 'Penambahan Stok' : 'Pengurangan Stok';
-    saveChangeToHistory(action, nama, stokSekarang, stokBaru);
-    // =================================
+    await window.saveChangeToHistory(action, nama, stokSekarang, stokBaru);
+    // ============================================
 
     showToast(`✅ Stok "${nama}" berhasil diupdate menjadi ${stokBaru}`, 2000, 'success');
 
@@ -165,7 +165,7 @@ window.simpanStok = async function() {   // ← Ubah jadi async
 };
 
 // ============================================================
-// EDIT STOK DIRECT (Double Click)
+// EDIT STOK DIRECT (Double Click) - SUDAH DIUPDATE
 // ============================================================
 window.saveStockEditDirect = async function(nama) {
   const newStock = parseFloat(document.getElementById('editStockValue').value);
@@ -194,9 +194,9 @@ window.saveStockEditDirect = async function(nama) {
     
     await set(ref(db, 'stok_operasional/' + key), { nama, stok: newStock, kategori });
 
-    // === SIMPAN RIWAYAT PERUBAHAN ===
-    saveChangeToHistory('Edit Manual Stok', nama, stokLama, newStock);
-    // =================================
+    // === CATAT RIWAYAT PERUBAHAN (VERSI BARU) ===
+    await window.saveChangeToHistory('Edit Manual Stok', nama, stokLama, newStock);
+    // ============================================
 
     showToast(`✅ Stok "${nama}" diubah menjadi ${newStock}`, 2000, 'success');
     document.getElementById('editStockDirectModal')?.classList.remove('modal-open');
@@ -208,31 +208,6 @@ window.saveStockEditDirect = async function(nama) {
     console.error("Error edit stok:", error);
     showToast('Gagal mengupdate stok', 3000, 'error');
   }
-};
-
-// ============================================================
-// FILTER FUNCTIONS
-// ============================================================
-window.applyFilter = function(kategori) {
-  const input = document.getElementById(`filter_${kategori.replace(/\s/g, '_')}`);
-  const value = parseInt(input?.value);
-  if (isNaN(value)) delete activeFilters[kategori];
-  else activeFilters[kategori] = value;
-  loadStokWithCategories();
-};
-
-window.clearFilter = function(kategori) {
-  delete activeFilters[kategori];
-  const input = document.getElementById(`filter_${kategori.replace(/\s/g, '_')}`);
-  if (input) input.value = '';
-  loadStokWithCategories();
-};
-
-window.resetAllFilters = function() {
-  activeFilters = {};
-  document.querySelectorAll('.filter-input').forEach(input => input.value = '');
-  loadStokWithCategories();
-  showToast('Semua filter direset', 2000, 'info');
 };
 
 // ============================================================
@@ -265,6 +240,31 @@ window.editStockDirect = function(nama, currentStock) {
   `;
   document.body.appendChild(modal);
   setTimeout(() => document.getElementById('editStockValue')?.focus(), 100);
+};
+
+// ============================================================
+// FILTER FUNCTIONS
+// ============================================================
+window.applyFilter = function(kategori) {
+  const input = document.getElementById(`filter_${kategori.replace(/\s/g, '_')}`);
+  const value = parseInt(input?.value);
+  if (isNaN(value)) delete activeFilters[kategori];
+  else activeFilters[kategori] = value;
+  loadStokWithCategories();
+};
+
+window.clearFilter = function(kategori) {
+  delete activeFilters[kategori];
+  const input = document.getElementById(`filter_${kategori.replace(/\s/g, '_')}`);
+  if (input) input.value = '';
+  loadStokWithCategories();
+};
+
+window.resetAllFilters = function() {
+  activeFilters = {};
+  document.querySelectorAll('.filter-input').forEach(input => input.value = '');
+  loadStokWithCategories();
+  showToast('Semua filter direset', 2000, 'info');
 };
 
 // ============================================================
@@ -396,20 +396,10 @@ function loadStokWithCategories() {
 }
 
 // ============================================================
-// RIWAYAT PERUBAHAN STOK - Untuk stok.js
+// JALANKAN SAAT HALAMAN DIMUAT
 // ============================================================
-function saveChangeToHistory(action, itemName, oldValue, newValue, changedBy = "Admin") {
-  const historyItem = {
-    id: Date.now(),
-    timestamp: new Date().toISOString(),
-    tanggalISO: getTodayISO(),
-    action: action,
-    item: itemName,
-    oldValue: Number(oldValue),
-    newValue: Number(newValue),
-    diff: Number(newValue) - Number(oldValue),
-    changedBy: changedBy
-  };
-
-  push(historyRef, historyItem);
-}
+document.addEventListener('DOMContentLoaded', () => {
+  initializePage().then(() => {
+    initStok();
+  });
+});

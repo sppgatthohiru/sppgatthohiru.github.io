@@ -1,11 +1,12 @@
 // ============================================================
-// DASHBOARD.JS - Halaman Utama ASLAP
+// DASHBOARD.JS - Halaman Utama ASLAP MBG
 // Theme: Professional Blue - Clean & Modern
-// Version: 3.2 (Updated: Daily Data Checklist instead of Relawan Summary)
+// Version: 3.3 (Updated with logActivity - Siapa yang mengubah data)
 // ============================================================
-import { ref, onValue, get, set, push } from "https://www.gstatic.com/firebasejs/11.7.0/firebase-database.js";
+import { ref, onValue, get, set } from "https://www.gstatic.com/firebasejs/11.7.0/firebase-database.js";
 import { db, stokRef, sisaPengRef, omprengRef, absensiRef } from "./firebase-init.js";
-const historyRef = ref(db, 'stok_history');
+import { initAuthGuard } from './auth-guard.js';
+import { logActivity } from './utils.js';
 import { googleDocsLinks } from "./config.js";
 import { showToast, getTodayISO, escapeHtml } from "./utils.js";
 
@@ -13,7 +14,6 @@ import { showToast, getTodayISO, escapeHtml } from "./utils.js";
 // GLOBAL VARIABLES
 // ============================================================
 window.googleDocsLinks = googleDocsLinks;
-
 let chartSisa = null;
 let chartOmpreng = null;
 let chartTrend = null;
@@ -22,24 +22,23 @@ let historyIndex = -1;
 let lowStockAlertShown = false;
 let currentMetric = 'sisa';
 let currentRandomStoks = [];
-
-// ============================================================
-// HISTORY FIREBASE
-// ============================================================
-let changeHistory = [];           // Array riwayat dari Firebase
-let currentFilterDate = null;     // null = tampilkan semua tanggal
-
 // Filter chart variables
 let currentChartDays = 7;
 let chartStartDate = null;
 let chartEndDate = null;
 
+// ============================================================
+// HISTORY & FILTER
+// ============================================================
+let changeHistory = [];
+let currentFilterDate = null;
+
 // HARDCORE PEMAKAIAN PER HARI
 const DAILY_USAGE = {
-  'GAS_LPG_50KG': 1,    // 1 unit per hari
-  'GAS_LPG_12KG': 1,    // 1 unit per hari
-  'GALON_AIR': 10,      // 10 unit per hari
-  'LISTRIK': 100        // 100 kWh per hari
+  'GAS_LPG_50KG': 1,
+  'GAS_LPG_12KG': 1,
+  'GALON_AIR': 10,
+  'LISTRIK': 100
 };
 
 // Threshold stok minimum
@@ -66,13 +65,13 @@ const CATEGORY_ICONS = {
 // ============================================================
 export function loadDashboard() {
   const savedNotes = localStorage.getItem('dashboard_notes') || '';
-  const today = new Date().toLocaleDateString('id-ID', { 
-    weekday: 'long', 
-    year: 'numeric', 
-    month: 'long', 
-    day: 'numeric' 
+  const today = new Date().toLocaleDateString('id-ID', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
   });
-  
+
   return `
     <!-- ==================== HEADER SECTION ==================== -->
     <div class="mb-6">
@@ -119,7 +118,7 @@ export function loadDashboard() {
           </div>
         </div>
       </div>
-      
+     
       <!-- Card 2: Stok Menipis -->
       <div class="card bg-gradient-to-br from-amber-500 to-orange-600 text-white shadow-xl cursor-pointer hover:shadow-2xl transition-all hover:-translate-y-1 group" onclick="window.toggleLowStockList()">
         <div class="card-body p-5">
@@ -139,7 +138,7 @@ export function loadDashboard() {
           </div>
         </div>
       </div>
-      
+     
       <!-- Card 3: Rata-rata Metric -->
       <div class="card bg-gradient-to-br from-[#3182ce] to-[#4299e1] text-white shadow-xl cursor-pointer hover:shadow-2xl transition-all hover:-translate-y-1 group" onclick="window.toggleMetric()">
         <div class="card-body p-5">
@@ -177,9 +176,8 @@ export function loadDashboard() {
       </div>
     </div>
 
-    <!-- ==================== PREDIKSI STOK + CHECKLIST HARIAN (ROW) ==================== -->
+    <!-- ==================== PREDIKSI STOK + CHECKLIST HARIAN ==================== -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-6">
-      
       <!-- Prediksi Stok Habis Card -->
       <div class="card bg-white shadow-md border border-slate-100 hover:shadow-lg transition-all">
         <div class="card-body p-4">
@@ -195,8 +193,8 @@ export function loadDashboard() {
           </div>
         </div>
       </div>
-      
-      <!-- Checklist 3 Data Harian Card (Baru) -->
+     
+      <!-- Checklist 3 Data Harian Card -->
       <div class="card bg-white shadow-md border border-slate-100 hover:shadow-lg transition-all">
         <div class="card-body p-4">
           <div class="flex items-center gap-2 mb-3">
@@ -215,10 +213,8 @@ export function loadDashboard() {
 
     <!-- ==================== TWO COLUMNS LAYOUT ==================== -->
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-6">
-      
-      <!-- LEFT COLUMN (2/3 width) - Quick Actions + Stock Cards -->
+      <!-- LEFT COLUMN -->
       <div class="lg:col-span-2 space-y-5">
-        
         <!-- Quick Actions Card -->
         <div class="card bg-white shadow-md border border-slate-100 hover:shadow-lg transition-all">
           <div class="card-body p-4">
@@ -250,7 +246,7 @@ export function loadDashboard() {
 
         <!-- Stock Cards Grid -->
         <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <!-- LPG 50KG Card -->
+          <!-- LPG 50KG -->
           <div class="card bg-white shadow-md border border-slate-100 hover:shadow-lg transition-all group">
             <div class="card-body p-3 text-center">
               <div class="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center mx-auto mb-2 group-hover:scale-110 transition-transform">
@@ -265,8 +261,8 @@ export function loadDashboard() {
               <p class="text-[10px] text-slate-400">Unit</p>
             </div>
           </div>
-          
-          <!-- LPG 12KG Card -->
+
+          <!-- LPG 12KG -->
           <div class="card bg-white shadow-md border border-slate-100 hover:shadow-lg transition-all group">
             <div class="card-body p-3 text-center">
               <div class="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center mx-auto mb-2 group-hover:scale-110 transition-transform">
@@ -281,8 +277,8 @@ export function loadDashboard() {
               <p class="text-[10px] text-slate-400">Unit</p>
             </div>
           </div>
-          
-          <!-- Galon Air Card -->
+
+          <!-- Galon Air -->
           <div class="card bg-white shadow-md border border-slate-100 hover:shadow-lg transition-all group">
             <div class="card-body p-3 text-center">
               <div class="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center mx-auto mb-2 group-hover:scale-110 transition-transform">
@@ -297,8 +293,8 @@ export function loadDashboard() {
               <p class="text-[10px] text-slate-400">Unit</p>
             </div>
           </div>
-          
-          <!-- Listrik Card -->
+
+          <!-- Listrik -->
           <div class="card bg-white shadow-md border border-slate-100 hover:shadow-lg transition-all">
             <div class="card-body p-3 text-center">
               <div class="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center mx-auto mb-2">
@@ -316,7 +312,7 @@ export function loadDashboard() {
         </div>
       </div>
 
-      <!-- RIGHT COLUMN (1/3 width) - Notes Card -->
+      <!-- RIGHT COLUMN - Notes -->
       <div class="card bg-white shadow-md border border-slate-100 hover:shadow-lg transition-all">
         <div class="card-body p-3">
           <div class="flex justify-between items-center mb-2">
@@ -362,14 +358,14 @@ export function loadDashboard() {
             </button>
           </div>
         </div>
-        
+       
         <div id="stokOperasionalGrid" class="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-80 overflow-y-auto custom-scrollbar">
           <div class="text-center py-4 text-slate-400 col-span-2 text-sm">
             <span class="loading loading-spinner loading-sm text-primary"></span>
             <p class="mt-1 text-xs">Memuat data stok...</p>
           </div>
         </div>
-        
+       
         <div class="text-center mt-3 pt-2 border-t border-slate-100">
           <button class="btn btn-link text-primary text-xs gap-1" onclick="window.goToStokPage()">
             <i class="fas fa-arrow-right"></i> Lihat Semua Stok Operasional
@@ -377,7 +373,8 @@ export function loadDashboard() {
         </div>
       </div>
     </div>
-    <!-- ==================== RIWAYAT PERUBAHAN (FIREBASE + FILTER) ==================== -->
+
+    <!-- ==================== RIWAYAT PERUBAHAN ==================== -->
     <div class="card bg-white shadow-md border border-slate-100 mb-6">
       <div class="card-body p-4">
         <div class="flex justify-between items-center mb-3 flex-wrap gap-3">
@@ -387,26 +384,19 @@ export function loadDashboard() {
             </div>
             <h3 class="font-semibold text-slate-700 text-sm">Riwayat Perubahan Stok</h3>
           </div>
-
-          <!-- FILTER TANGGAL -->
           <div class="flex items-center gap-2 flex-wrap">
-            <input type="date" id="historyDateFilter" 
-                   class="input input-bordered input-sm w-36">
-            <button onclick="window.filterHistoryByDate()" 
-                    class="btn btn-primary btn-sm gap-1">
+            <input type="date" id="historyDateFilter" class="input input-bordered input-sm w-36">
+            <button onclick="window.filterHistoryByDate()" class="btn btn-primary btn-sm gap-1">
               <i class="fas fa-filter"></i> Filter
             </button>
-            <button onclick="window.showAllHistory()" 
-                    class="btn btn-ghost btn-sm">
+            <button onclick="window.showAllHistory()" class="btn btn-ghost btn-sm">
               Semua Tanggal
             </button>
-            <button onclick="window.clearHistory()" 
-                    class="btn btn-ghost btn-xs text-slate-400 hover:text-error">
+            <button onclick="window.clearHistory()" class="btn btn-ghost btn-xs text-slate-400 hover:text-error">
               <i class="fas fa-trash-alt"></i>
             </button>
           </div>
         </div>
-
         <div id="historyTimeline" class="max-h-96 overflow-y-auto custom-scrollbar pr-2">
           <!-- Timeline diisi otomatis oleh JS -->
         </div>
@@ -442,7 +432,7 @@ export function loadDashboard() {
           <canvas id="trendChart" class="w-full h-52"></canvas>
         </div>
       </div>
-      
+     
       <!-- Sisa Pengolahan Chart -->
       <div class="card bg-white shadow-md border border-slate-100">
         <div class="card-body p-4">
@@ -455,7 +445,7 @@ export function loadDashboard() {
           <canvas id="chartSisa" class="w-full h-52"></canvas>
         </div>
       </div>
-      
+     
       <!-- Sampah Ompreng Chart -->
       <div class="card bg-white shadow-md border border-slate-100">
         <div class="card-body p-4">
@@ -502,7 +492,7 @@ export function loadDashboard() {
         </div>
       </div>
     </dialog>
-    
+   
     <!-- Edit Stock Modal -->
     <dialog id="editStockModal" class="modal">
       <div class="modal-box max-w-md">
@@ -524,20 +514,22 @@ export function loadDashboard() {
 // ============================================================
 // SECTION 2: INITIALIZATION
 // ============================================================
+async function initializePage() {
+  const isLoggedIn = await initAuthGuard();
+  if (!isLoggedIn) return;
+}
+
 export function initDashboard() {
   updateDashboard();
   initNotes();
   checkBrowserNotification();
   loadStokOperasionalList();
   loadHistoryFromFirebase();
-  
-  // Update checklist setiap 30 detik
+
   setInterval(() => {
     updateDailyDataChecklist();
     updateStockPrediction();
-    setInterval(() => { 3000 });
   }, 30000);
-  
 }
 
 export function updateDashboard() {
@@ -552,17 +544,16 @@ export function updateDashboard() {
       'GALON_AIR': d['GALON_AIR']?.stok || 0,
       'LISTRIK': d['LISTRIK']?.stok || 0
     };
-    
+
     const elements = { lpg50: 'GAS_LPG_50KG', lpg12: 'GAS_LPG_12KG', galon: 'GALON_AIR', listrik: 'LISTRIK' };
     Object.entries(elements).forEach(([id, key]) => {
       const el = document.getElementById(id);
       if (el) el.textContent = stokValues[key];
     });
-    
+
     updateKPI(stokValues);
     updateLowStockList(stokValues);
     checkLowStock(stokValues);
-    saveToHistory(stokValues);
     updateStockPrediction();
   });
 
@@ -586,23 +577,21 @@ export function updateDashboard() {
       chartSisa = new Chart(ctx, {
         type: 'bar',
         data: { labels: dates, datasets },
-        options: { 
-          responsive: true, 
+        options: {
+          responsive: true,
           maintainAspectRatio: true,
-          plugins: { 
+          plugins: {
             legend: { position: 'bottom', labels: { font: { size: 9 } } },
             tooltip: { bodyFont: { size: 10 } }
           },
-          scales: { 
+          scales: {
             y: { beginAtZero: true, title: { display: true, text: 'kg', font: { size: 9 } } },
             x: { ticks: { font: { size: 9, rotation: 45, maxRotation: 45 } } }
           }
         }
       });
-      
       updateRataMetric(data, null);
     }
-    // Update checklist ketika data sisa berubah
     updateDailyDataChecklist();
   });
 
@@ -626,34 +615,34 @@ export function updateDashboard() {
       chartOmpreng = new Chart(ctx, {
         type: 'bar',
         data: { labels: dates, datasets },
-        options: { 
-          responsive: true, 
+        options: {
+          responsive: true,
           maintainAspectRatio: true,
-          plugins: { 
+          plugins: {
             legend: { position: 'bottom', labels: { font: { size: 9 } } },
             tooltip: { bodyFont: { size: 10 } }
           },
-          scales: { 
+          scales: {
             y: { beginAtZero: true, title: { display: true, text: 'kg', font: { size: 9 } } },
             x: { ticks: { font: { size: 9, rotation: 45, maxRotation: 45 } } }
           }
         }
       });
-      
       updateRataMetric(null, data);
     }
-    // Update checklist ketika data ompreng berubah
     updateDailyDataChecklist();
   });
-  
-  // Update checklist ketika data absensi berubah
-  onValue(absensiRef, () => {
-    updateDailyDataChecklist();
-  });
-  
+
+  onValue(absensiRef, () => updateDailyDataChecklist());
+
   initTrendChart();
-  updateDailyDataChecklist(); // Initial load
+  updateDailyDataChecklist();
 }
+
+// ============================================================
+// LOG ACTIVITY HELPER (BARU)
+// ============================================================
+
 
 // ============================================================
 // SECTION 3: KPI FUNCTIONS
@@ -674,7 +663,6 @@ window.toggleLowStockList = function() {
 
 function updateLowStockList(stokValues) {
   const lowStockItems = [];
-  
   Object.keys(STOCK_THRESHOLDS).forEach(key => {
     const stok = stokValues[key] || 0;
     const threshold = STOCK_THRESHOLDS[key];
@@ -684,12 +672,12 @@ function updateLowStockList(stokValues) {
       lowStockItems.push({ name: displayName, stok: stok, threshold: threshold });
     }
   });
-  
+
   const itemsContainer = document.getElementById('lowStockItems');
   const stokMenipisEl = document.getElementById('stokMenipis');
-  
+
   if (stokMenipisEl) stokMenipisEl.textContent = lowStockItems.length;
-  
+
   if (itemsContainer) {
     if (lowStockItems.length > 0) {
       itemsContainer.innerHTML = lowStockItems.map(item => `
@@ -706,14 +694,13 @@ function updateLowStockList(stokValues) {
 
 function checkLowStock(stokValues) {
   const lowStokItems = [];
-  
   Object.keys(STOCK_THRESHOLDS).forEach(key => {
     const stok = stokValues[key] || 0;
     if (stok <= STOCK_THRESHOLDS[key]) {
       lowStokItems.push(`${key.replace(/_/g, ' ')}: ${stok}`);
     }
   });
-  
+
   if (lowStokItems.length > 0 && !lowStockAlertShown) {
     showToast(`⚠️ Stok menipis!\n${lowStokItems.join('\n')}`, 5000, 'warning');
     sendBrowserNotification('Peringatan Stok', lowStokItems.join('\n'));
@@ -730,7 +717,7 @@ window.toggleMetric = function() {
   const metricLabel = document.getElementById('metricLabel');
   const metricIcon = document.getElementById('metricIcon');
   const metricUnit = document.getElementById('metricUnit');
-  
+
   if (currentMetric === 'sisa') {
     metricLabel.innerHTML = 'Rata-rata Sisa';
     metricIcon.className = 'fas fa-chart-bar text-xl';
@@ -740,7 +727,7 @@ window.toggleMetric = function() {
     metricIcon.className = 'fas fa-trash-alt text-xl';
     if (metricUnit) metricUnit.innerHTML = 'kg/hari';
   }
-  
+
   get(sisaPengRef).then(snap => updateRataMetric(snap.val(), null));
   get(omprengRef).then(snap => updateRataMetric(null, snap.val()));
 };
@@ -748,91 +735,84 @@ window.toggleMetric = function() {
 function updateRataMetric(sisaData, omprengData) {
   const rataMetricEl = document.getElementById('rataMetric');
   if (!rataMetricEl) return;
-  
+
   let total = 0;
   let count = 0;
-  
+
   let data = null;
   if (currentMetric === 'sisa') {
     data = sisaData;
   } else {
     data = omprengData;
   }
-  
+
   if (!data) {
     if (currentMetric === 'sisa') {
       get(sisaPengRef).then(snap => {
-        if (snap.exists()) {
-          calculateAndUpdateMetric(snap.val());
-        } else {
-          rataMetricEl.textContent = '0';
-        }
+        if (snap.exists()) calculateAndUpdateMetric(snap.val());
+        else rataMetricEl.textContent = '0';
       });
       return;
     } else {
       get(omprengRef).then(snap => {
-        if (snap.exists()) {
-          calculateAndUpdateMetric(snap.val());
-        } else {
-          rataMetricEl.textContent = '0';
-        }
+        if (snap.exists()) calculateAndUpdateMetric(snap.val());
+        else rataMetricEl.textContent = '0';
       });
       return;
     }
   }
-  
+
   calculateAndUpdateMetric(data);
-  
+
   function calculateAndUpdateMetric(dataObj) {
     let totalVal = 0;
     let countVal = 0;
-    
+
     if (dataObj && typeof dataObj === 'object') {
       Object.values(dataObj).forEach(item => {
         if (item && typeof item === 'object') {
-          totalVal += (item.pokok || 0) + (item.sayur || 0) + (item.laukpauk || 0) + 
+          totalVal += (item.pokok || 0) + (item.sayur || 0) + (item.laukpauk || 0) +
                      (item.lauknabati || 0) + (item.buah || 0);
           countVal++;
         }
       });
     }
-    
+
     const result = countVal > 0 ? (totalVal / countVal).toFixed(1) : '0';
     rataMetricEl.textContent = result;
   }
 }
 
 // ============================================================
-// SECTION 6: TOTAL STOCK DETAIL MODAL + EXPORT ALL STOCK
+// SECTION 6: TOTAL STOCK DETAIL + EXPORT
 // ============================================================
 window.showTotalStockDetail = async function() {
   try {
     const snapshot = await get(stokRef);
     const data = snapshot.val() || {};
-    
+
     const allStoks = [];
     let grandTotal = 0;
-    
+
     for (const [key, value] of Object.entries(data)) {
       const nama = value.nama || key.replace(/_/g, ' ');
       const stok = value.stok || 0;
       allStoks.push({ nama, stok });
       grandTotal += stok;
     }
-    
+
     allStoks.sort((a, b) => b.stok - a.stok);
-    
+
     const modal = document.getElementById('reportModal');
     const reportContent = document.getElementById('reportContent');
-    
+
     if (!modal || !reportContent) return;
-    
+
     reportContent.innerHTML = `
       <div class="alert alert-success shadow-lg mb-3 py-2 text-sm">
         <i class="fas fa-chart-simple"></i>
         <span class="font-bold">TOTAL STOK KESELURUHAN: ${grandTotal}</span>
       </div>
-      
       <div class="space-y-2 mt-3">
         <div class="font-semibold text-slate-700 mb-2 flex items-center gap-2 text-sm">
           <i class="fas fa-list-ul text-primary"></i> Rincian per Item
@@ -846,14 +826,13 @@ window.showTotalStockDetail = async function() {
           `).join('')}
         </div>
       </div>
-      
       <div class="modal-action mt-3">
         <button class="btn btn-primary btn-xs gap-1" onclick="window.exportAllStockToCSV()">
           <i class="fas fa-file-excel"></i> Export Semua Stok (CSV)
         </button>
       </div>
     `;
-    
+
     modal.showModal();
   } catch (error) {
     console.error('Error:', error);
@@ -865,10 +844,10 @@ window.exportAllStockToCSV = async function() {
   try {
     const snapshot = await get(stokRef);
     const data = snapshot.val() || {};
-    
+
     const allStoks = [];
     let grandTotal = 0;
-    
+
     for (const [key, value] of Object.entries(data)) {
       const nama = value.nama || key.replace(/_/g, ' ');
       const stok = value.stok || 0;
@@ -877,9 +856,9 @@ window.exportAllStockToCSV = async function() {
         grandTotal += stok;
       }
     }
-    
+
     allStoks.sort((a, b) => b.stok - a.stok);
-    
+
     const todayISO = getTodayISO();
     const csvRows = [
       ['=== LAPORAN TOTAL STOK OPERASIONAL ==='],
@@ -888,7 +867,7 @@ window.exportAllStockToCSV = async function() {
       ['Nama Barang', 'Jumlah Stok'],
       ...allStoks.map(item => [item.nama, item.stok])
     ];
-    
+
     const csvContent = csvRows.map(row => row.join(',')).join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -897,7 +876,7 @@ window.exportAllStockToCSV = async function() {
     a.download = `total_stok_operasional_${todayISO}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-    
+
     showToast(`✅ Berhasil export ${allStoks.length} item stok`, 2000, 'success');
   } catch (error) {
     console.error('Export error:', error);
@@ -906,12 +885,12 @@ window.exportAllStockToCSV = async function() {
 };
 
 // ============================================================
-// SECTION 7: STOK OPERASIONAL LIST FUNCTIONS
+// SECTION 7: STOK OPERASIONAL LIST
 // ============================================================
 function loadStokOperasionalList() {
   onValue(stokRef, (snapshot) => {
     const data = snapshot.val() || {};
-    
+
     const stokArray = Object.values(data)
       .filter(item => item.nama && !['GAS_LPG_50KG', 'GAS_LPG_12KG', 'GALON_AIR', 'LISTRIK'].includes(item.nama.replace(/ /g, '_')))
       .map(item => ({
@@ -919,10 +898,10 @@ function loadStokOperasionalList() {
         stok: item.stok || 0,
         kategori: item.kategori || 'Barang Lainnya'
       }));
-    
+
     const totalItemEl = document.getElementById('totalItemStok');
     if (totalItemEl) totalItemEl.innerHTML = `<i class="fas fa-database text-xs"></i> ${stokArray.length} item`;
-    
+
     currentRandomStoks = stokArray;
     displayRandomStok();
   });
@@ -931,7 +910,7 @@ function loadStokOperasionalList() {
 function displayRandomStok() {
   const gridContainer = document.getElementById('stokOperasionalGrid');
   if (!gridContainer) return;
-  
+
   if (currentRandomStoks.length === 0) {
     gridContainer.innerHTML = `
       <div class="text-center py-4 text-slate-400 col-span-2 text-sm">
@@ -942,19 +921,19 @@ function displayRandomStok() {
     `;
     return;
   }
-  
+
   const shuffled = [...currentRandomStoks];
   for (let i = shuffled.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
   }
-  
+
   const displayItems = shuffled.slice(0, 6);
-  
+
   gridContainer.innerHTML = displayItems.map(item => {
     const isLowStock = item.stok < 5;
     const badgeClass = isLowStock ? 'badge-error' : 'badge-success';
-    
+
     return `
       <div class="flex justify-between items-center p-2 bg-slate-50 rounded-lg cursor-pointer hover:bg-primary/5 hover:shadow-md transition-all group" onclick="window.editStockDirectFromDashboard('${item.nama.replace(/'/g, "\\'")}', ${item.stok})">
         <div class="flex-1">
@@ -982,9 +961,9 @@ window.editStockDirectFromDashboard = function(nama, currentStock) {
   const modal = document.getElementById('editStockModal');
   const editTitle = document.getElementById('editStockTitle');
   const editContent = document.getElementById('editStockContent');
-  
+
   if (!modal || !editContent) return;
-  
+
   editTitle.innerHTML = `<i class="fas fa-edit text-primary"></i> Edit Stok: ${escapeHtml(nama)}`;
   editContent.innerHTML = `
     <div class="form-control">
@@ -1002,32 +981,30 @@ window.editStockDirectFromDashboard = function(nama, currentStock) {
       </button>
     </div>
   `;
-  
+
   modal.showModal();
   setTimeout(() => document.getElementById('editStockValueDashboard')?.focus(), 100);
 };
 
 window.saveStockEditFromDashboard = async function(nama) {
   const newStock = parseFloat(document.getElementById('editStockValueDashboard').value);
-  
+
   if (isNaN(newStock) || newStock < 0) {
     showToast('Masukkan jumlah yang valid (minimal 0)!', 3000, 'error');
     return;
   }
-  
+
   const key = nama.replace(/[^a-zA-Z0-9]/g, '_');
-  
+
   try {
     const snapshot = await get(ref(db, 'stok_operasional/' + key));
     const kategori = snapshot.exists() ? snapshot.val().kategori : 'Barang Lainnya';
     const stokLama = snapshot.exists() ? snapshot.val().stok || 0 : 0;
-   
+
     await set(ref(db, 'stok_operasional/' + key), { nama, stok: newStock, kategori });
 
-    // === SIMPAN RIWAYAT KE FIREBASE (BARU) ===
-    saveChangeToHistory('Edit Manual', nama, stokLama, newStock);
-    // =========================================
-   
+    await saveChangeToHistory('Edit Manual', nama, stokLama, newStock);
+
     showToast(`✅ Stok "${nama}" diubah menjadi ${newStock}`, 2000, 'success');
     window.closeEditStockModal();
     loadStokOperasionalList();
@@ -1056,14 +1033,14 @@ window.goToStokPage = function() {
 function initNotes() {
   const textarea = document.getElementById('dashboardNotes');
   const charCount = document.getElementById('charCount');
-  
+
   if (textarea) {
     textarea.addEventListener('input', function() {
       if (charCount) charCount.textContent = this.value.length;
       localStorage.setItem('dashboard_notes', this.value);
     });
   }
-  
+
   const searchInput = document.getElementById('notesSearch');
   if (searchInput && textarea) {
     searchInput.addEventListener('input', (e) => {
@@ -1095,160 +1072,107 @@ window.clearNotes = function() {
 window.quickAddStock = async (itemKey, amount) => editStok(itemKey, amount);
 
 // ============================================================
-// SECTION 11: HISTORY / UNDO FUNCTIONS
+// SECTION 11: STOCK MANAGEMENT
 // ============================================================
-function saveToHistory(stokData) {
-  stokHistory = stokHistory.slice(0, historyIndex + 1);
-  stokHistory.push(JSON.stringify(stokData));
-  if (stokHistory.length > 50) stokHistory.shift();
-  historyIndex = stokHistory.length - 1;
-}
+export async function editListrik() {
+  const inputListrik = document.getElementById('inputListrik');
+  const nilaiBaru = parseFloat(inputListrik.value);
 
-window.undoLastStock = async function() {
-  if (historyIndex > 0) {
-    historyIndex--;
-    const prevState = JSON.parse(stokHistory[historyIndex]);
-    
-    for (const [key, value] of Object.entries(prevState)) {
-      await set(ref(db, `stok_operasional/${key}`), {
-        nama: key.replace(/_/g, ' '),
-        stok: value
-      });
-    }
-    
-    showToast('Berhasil mengembalikan perubahan sebelumnya', 2000, 'success');
-    updateTimestamp();
-  } else {
-    showToast('Tidak ada riwayat untuk di-undo', 2000, 'info');
-  }
-};
-
-// ============================================================
-// SECTION 12: TREND CHART WITH DATE FILTER
-// ============================================================
-async function initTrendChart() {
-  const snapshot = await get(stokRef);
-  const stokData = snapshot.val() || {};
-  
-  const currentStok = {
-    lpg50: stokData['GAS_LPG_50KG']?.stok || 0,
-    galon: stokData['GALON_AIR']?.stok || 0,
-    listrik: stokData['LISTRIK']?.stok || 0
-  };
-  
-  const labels = [];
-  for (let i = currentChartDays - 1; i >= 0; i--) {
-    const date = new Date();
-    date.setDate(date.getDate() - i);
-    labels.push(date.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric' }));
-  }
-  
-  const datasets = [
-    {
-      label: 'LPG 50kg',
-      data: labels.map((_, idx) => Math.max(0, currentStok.lpg50 - (currentChartDays - 1 - idx) * DAILY_USAGE.GAS_LPG_50KG)),
-      borderColor: '#1e3a5f',
-      backgroundColor: 'rgba(30, 58, 95, 0.1)',
-      tension: 0.4,
-      fill: true
-    },
-    {
-      label: 'Galon Air',
-      data: labels.map((_, idx) => Math.max(0, currentStok.galon - (currentChartDays - 1 - idx) * DAILY_USAGE.GALON_AIR)),
-      borderColor: '#2c5282',
-      backgroundColor: 'rgba(44, 82, 130, 0.1)',
-      tension: 0.4,
-      fill: true
-    },
-    {
-      label: 'Listrik (kWh)',
-      data: labels.map((_, idx) => Math.max(0, currentStok.listrik - (currentChartDays - 1 - idx) * DAILY_USAGE.LISTRIK)),
-      borderColor: '#3182ce',
-      backgroundColor: 'rgba(49, 130, 206, 0.1)',
-      tension: 0.4,
-      fill: true
-    }
-  ];
-  
-  const ctx = document.getElementById('trendChart');
-  if (ctx) {
-    if (chartTrend) chartTrend.destroy();
-    chartTrend = new Chart(ctx, {
-      type: 'line',
-      data: { labels, datasets },
-      options: {
-        responsive: true,
-        maintainAspectRatio: true,
-        plugins: { 
-          legend: { position: 'bottom', labels: { font: { size: 9 } } },
-          tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.raw.toFixed(1)} unit` } }
-        },
-        scales: {
-          y: { beginAtZero: true, ticks: { font: { size: 9 } }, title: { display: true, text: 'Jumlah', font: { size: 9 } } },
-          x: { ticks: { font: { size: 9, rotation: 45, maxRotation: 45 } } }
-        }
-      }
-    });
-  }
-}
-
-window.changeChartDays = function() {
-  const select = document.getElementById('chartFilterDays');
-  const customDiv = document.getElementById('customDateRange');
-  const value = select.value;
-  
-  if (value === 'custom') {
-    customDiv.classList.remove('hidden');
-  } else {
-    customDiv.classList.add('hidden');
-    currentChartDays = parseInt(value);
-    initTrendChart();
-  }
-};
-
-window.applyCustomDate = function() {
-  const startDate = document.getElementById('startDate').value;
-  const endDate = document.getElementById('endDate').value;
-  
-  if (!startDate || !endDate) {
-    showToast('Pilih kedua tanggal!', 2000, 'error');
+  if (isNaN(nilaiBaru) || nilaiBaru < 0) {
+    showToast('Masukkan jumlah yang valid!', 3000, 'error');
     return;
   }
-  
-  chartStartDate = new Date(startDate);
-  chartEndDate = new Date(endDate);
-  
-  const diffTime = Math.abs(chartEndDate - chartStartDate);
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-  currentChartDays = diffDays;
-  initTrendChart();
-};
+
+  try {
+    const stokLama = parseFloat(document.getElementById('listrik').textContent) || 0;
+
+    await set(ref(db, 'stok_operasional/LISTRIK'), { nama: "LISTRIK", stok: nilaiBaru });
+
+    await saveChangeToHistory('Update Listrik', 'Listrik', stokLama, nilaiBaru);
+
+    document.getElementById('listrik').textContent = nilaiBaru;
+    inputListrik.value = '';
+    showToast(`⚡ Listrik diupdate menjadi ${nilaiBaru} kWh`, 2000, 'success');
+    updateTimestamp();
+    updateStockPrediction();
+  } catch (error) {
+    console.error("Error update listrik:", error);
+    showToast('Gagal mengupdate listrik!', 3000, 'error');
+  }
+}
+
+export async function editStok(namaKey, perubahan) {
+  try {
+    const snapshot = await get(ref(db, 'stok_operasional/' + namaKey));
+    let stokSekarang = snapshot.exists() ? snapshot.val().stok || 0 : 0;
+    let namaAsli = snapshot.exists() ? snapshot.val().nama : namaKey.replace(/_/g, ' ');
+    const stokBaru = Math.max(0, stokSekarang + perubahan);
+
+    await set(ref(db, 'stok_operasional/' + namaKey), { nama: namaAsli, stok: stokBaru });
+
+    const action = perubahan > 0 ? 'Penambahan Stok' : 'Pengurangan Stok';
+    await saveChangeToHistory(action, namaAsli, stokSekarang, stokBaru);
+
+    const elementId = namaKey === "GAS_LPG_50KG" ? "lpg50" : namaKey === "GAS_LPG_12KG" ? "lpg12" : "galon";
+    const element = document.getElementById(elementId);
+    if (element) element.textContent = stokBaru;
+
+    const perubahanText = perubahan > 0 ? `+${perubahan}` : perubahan;
+    showToast(`${namaAsli}: ${perubahanText} → Stok sekarang ${stokBaru}`, 2000);
+    updateTimestamp();
+    updateStockPrediction();
+  } catch (error) {
+    console.error("Error update stok:", error);
+    showToast('Gagal mengupdate stok!', 3000, 'error');
+  }
+}
 
 // ============================================================
-// SECTION 13: PREDIKSI STOK HABIS (HARDCODE)
+// SECTION 12: NOTIFICATION & HELPER
+// ============================================================
+function checkBrowserNotification() {
+  if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
+}
+
+function sendBrowserNotification(title, body) {
+  if ('Notification' in window && Notification.permission === 'granted') {
+    new Notification(title, { body, icon: '/favicon.ico' });
+  }
+}
+
+function updateTimestamp() {
+  const timestampEl = document.getElementById('lastUpdate');
+  if (timestampEl) {
+    timestampEl.innerHTML = `<i class="far fa-clock"></i> Terakhir update: ${new Date().toLocaleTimeString('id-ID')}`;
+  }
+}
+
+// ============================================================
+// SECTION 13: PREDIKSI STOK HABIS
 // ============================================================
 async function updateStockPrediction() {
   try {
     const stokSnapshot = await get(stokRef);
     const stokData = stokSnapshot.val() || {};
-    
+
     const currentLpg50 = stokData['GAS_LPG_50KG']?.stok || 0;
     const currentLpg12 = stokData['GAS_LPG_12KG']?.stok || 0;
     const currentGalon = stokData['GALON_AIR']?.stok || 0;
     const currentListrik = stokData['LISTRIK']?.stok || 0;
-    
-    // HARDCORE PEMAKAIAN PER HARI
+
     const lpg50DaysLeft = Math.floor(currentLpg50 / DAILY_USAGE.GAS_LPG_50KG);
     const lpg12DaysLeft = Math.floor(currentLpg12 / DAILY_USAGE.GAS_LPG_12KG);
     const galonDaysLeft = Math.floor(currentGalon / DAILY_USAGE.GALON_AIR);
     const listrikDaysLeft = Math.floor(currentListrik / DAILY_USAGE.LISTRIK);
-    
+
     const getStatusClass = (days) => {
       if (days <= 2) return 'text-error font-bold';
       if (days <= 5) return 'text-warning font-semibold';
       return 'text-primary';
     };
-    
+
     const predictionContainer = document.getElementById('stockPredictionList');
     if (predictionContainer) {
       predictionContainer.innerHTML = `
@@ -1308,138 +1232,119 @@ async function updateStockPrediction() {
 }
 
 // ============================================================
-// SECTION 14: CHECKLIST TIGA DATA HARIAN (BARU)
+// SECTION 14: CHECKLIST TIGA DATA HARIAN
 // ============================================================
 async function updateDailyDataChecklist() {
-    try {
-        const todayISO = getTodayISO();
-        
-        // Cek Absensi Hari Ini
-        const absensiSnapshot = await get(absensiRef);
-        const absensiData = absensiSnapshot.val() || {};
-        const hasAbsensiToday = Object.values(absensiData).some(item => item.tanggalISO === todayISO);
-        
-        // Cek Sisa Pengolahan Hari Ini
-        const sisaSnapshot = await get(sisaPengRef);
-        const sisaData = sisaSnapshot.val() || {};
-        const hasSisaToday = Object.values(sisaData).some(item => item.tanggalISO === todayISO);
-        
-        // Cek Ompreng Hari Ini
-        const omprengSnapshot = await get(omprengRef);
-        const omprengData = omprengSnapshot.val() || {};
-        const hasOmprengToday = Object.values(omprengData).some(item => item.tanggalISO === todayISO);
-        
-        // Update UI
-        updateChecklistUI(hasAbsensiToday, hasSisaToday, hasOmprengToday);
-        
-    } catch (error) {
-        console.error('Error checking daily data:', error);
-        const container = document.getElementById('dailyDataChecklist');
-        if (container) {
-            container.innerHTML = `
-                <div class="text-center py-2 text-slate-400">
-                    <i class="fas fa-exclamation-triangle text-xs"></i>
-                    <p class="text-[10px] mt-0.5">Gagal memuat data</p>
-                </div>
-            `;
-        }
+  try {
+    const todayISO = getTodayISO();
+
+    const absensiSnapshot = await get(absensiRef);
+    const absensiData = absensiSnapshot.val() || {};
+    const hasAbsensiToday = Object.values(absensiData).some(item => item.tanggalISO === todayISO);
+
+    const sisaSnapshot = await get(sisaPengRef);
+    const sisaData = sisaSnapshot.val() || {};
+    const hasSisaToday = Object.values(sisaData).some(item => item.tanggalISO === todayISO);
+
+    const omprengSnapshot = await get(omprengRef);
+    const omprengData = omprengSnapshot.val() || {};
+    const hasOmprengToday = Object.values(omprengData).some(item => item.tanggalISO === todayISO);
+
+    updateChecklistUI(hasAbsensiToday, hasSisaToday, hasOmprengToday);
+  } catch (error) {
+    console.error('Error checking daily data:', error);
+    const container = document.getElementById('dailyDataChecklist');
+    if (container) {
+      container.innerHTML = `
+        <div class="text-center py-2 text-slate-400">
+          <i class="fas fa-exclamation-triangle text-xs"></i>
+          <p class="text-[10px] mt-0.5">Gagal memuat data</p>
+        </div>
+      `;
     }
+  }
 }
 
 function updateChecklistUI(hasAbsensi, hasSisa, hasOmpreng) {
-    const container = document.getElementById('dailyDataChecklist');
-    if (!container) return;
-    
-    const allCompleted = hasAbsensi && hasSisa && hasOmpreng;
-    
-    container.innerHTML = `
-        <div class="space-y-2">
-            <!-- Item 1: Absensi Relawan -->
-            <div class="flex items-center justify-between p-2 rounded-lg ${hasAbsensi ? 'bg-green-50' : 'bg-amber-50'} cursor-pointer hover:opacity-80 transition-all" 
-                 onclick="window.goToPageWithAlert('absensi', 'Absensi Relawan')">
-                <div class="flex items-center gap-2">
-                    <div class="w-6 h-6 rounded-full flex items-center justify-center ${hasAbsensi ? 'bg-green-500' : 'bg-amber-500'} text-white">
-                        <i class="fas ${hasAbsensi ? 'fa-check' : 'fa-exclamation'} text-xs"></i>
-                    </div>
-                    <div>
-                        <p class="text-xs font-medium ${hasAbsensi ? 'text-green-700' : 'text-amber-700'}">Absensi Relawan</p>
-                        <p class="text-[10px] text-slate-400">Data kehadiran relawan</p>
-                    </div>
-                </div>
-                <div class="text-right">
-                    ${hasAbsensi ? 
-                        '<span class="badge badge-success badge-xs">Sudah diisi</span>' : 
-                        '<span class="badge badge-warning badge-xs">Belum diisi</span>'}
-                </div>
-            </div>
-            
-            <!-- Item 2: Sisa Pengolahan -->
-            <div class="flex items-center justify-between p-2 rounded-lg ${hasSisa ? 'bg-green-50' : 'bg-amber-50'} cursor-pointer hover:opacity-80 transition-all"
-                 onclick="window.goToPageWithAlert('sisa', 'Sisa Pengolahan')">
-                <div class="flex items-center gap-2">
-                    <div class="w-6 h-6 rounded-full flex items-center justify-center ${hasSisa ? 'bg-green-500' : 'bg-amber-500'} text-white">
-                        <i class="fas ${hasSisa ? 'fa-check' : 'fa-exclamation'} text-xs"></i>
-                    </div>
-                    <div>
-                        <p class="text-xs font-medium ${hasSisa ? 'text-green-700' : 'text-amber-700'}">Sisa Pengolahan</p>
-                        <p class="text-[10px] text-slate-400">Data sisa makanan</p>
-                    </div>
-                </div>
-                <div class="text-right">
-                    ${hasSisa ? 
-                        '<span class="badge badge-success badge-xs">Sudah diisi</span>' : 
-                        '<span class="badge badge-warning badge-xs">Belum diisi</span>'}
-                </div>
-            </div>
-            
-            <!-- Item 3: Sampah Ompreng -->
-            <div class="flex items-center justify-between p-2 rounded-lg ${hasOmpreng ? 'bg-green-50' : 'bg-amber-50'} cursor-pointer hover:opacity-80 transition-all"
-                 onclick="window.goToPageWithAlert('ompreng', 'Sampah Ompreng')">
-                <div class="flex items-center gap-2">
-                    <div class="w-6 h-6 rounded-full flex items-center justify-center ${hasOmpreng ? 'bg-green-500' : 'bg-amber-500'} text-white">
-                        <i class="fas ${hasOmpreng ? 'fa-check' : 'fa-exclamation'} text-xs"></i>
-                    </div>
-                    <div>
-                        <p class="text-xs font-medium ${hasOmpreng ? 'text-green-700' : 'text-amber-700'}">Sampah Ompreng</p>
-                        <p class="text-[10px] text-slate-400">Data sampah dapur</p>
-                    </div>
-                </div>
-                <div class="text-right">
-                    ${hasOmpreng ? 
-                        '<span class="badge badge-success badge-xs">Sudah diisi</span>' : 
-                        '<span class="badge badge-warning badge-xs">Belum diisi</span>'}
-                </div>
-            </div>
-            
-            <!-- Summary Badge -->
-            <div class="mt-3 pt-2 border-t border-slate-100 text-center">
-                ${allCompleted ? 
-                    '<span class="badge badge-success gap-1"><i class="fas fa-check-circle"></i> Lengkap! Semua data sudah diisi hari ini</span>' : 
-                    '<span class="badge badge-warning gap-1"><i class="fas fa-clock"></i> Masih ada data yang belum diisi</span>'}
-            </div>
+  const container = document.getElementById('dailyDataChecklist');
+  if (!container) return;
+
+  const allCompleted = hasAbsensi && hasSisa && hasOmpreng;
+
+  container.innerHTML = `
+    <div class="space-y-2">
+      <div class="flex items-center justify-between p-2 rounded-lg ${hasAbsensi ? 'bg-green-50' : 'bg-amber-50'} cursor-pointer hover:opacity-80 transition-all" onclick="window.goToPageWithAlert('absensi', 'Absensi Relawan')">
+        <div class="flex items-center gap-2">
+          <div class="w-6 h-6 rounded-full flex items-center justify-center ${hasAbsensi ? 'bg-green-500' : 'bg-amber-500'} text-white">
+            <i class="fas ${hasAbsensi ? 'fa-check' : 'fa-exclamation'} text-xs"></i>
+          </div>
+          <div>
+            <p class="text-xs font-medium ${hasAbsensi ? 'text-green-700' : 'text-amber-700'}">Absensi Relawan</p>
+            <p class="text-[10px] text-slate-400">Data kehadiran relawan</p>
+          </div>
         </div>
-    `;
+        <div class="text-right">
+          ${hasAbsensi ? '<span class="badge badge-success badge-xs">Sudah diisi</span>' : '<span class="badge badge-warning badge-xs">Belum diisi</span>'}
+        </div>
+      </div>
+
+      <div class="flex items-center justify-between p-2 rounded-lg ${hasSisa ? 'bg-green-50' : 'bg-amber-50'} cursor-pointer hover:opacity-80 transition-all" onclick="window.goToPageWithAlert('sisa', 'Sisa Pengolahan')">
+        <div class="flex items-center gap-2">
+          <div class="w-6 h-6 rounded-full flex items-center justify-center ${hasSisa ? 'bg-green-500' : 'bg-amber-500'} text-white">
+            <i class="fas ${hasSisa ? 'fa-check' : 'fa-exclamation'} text-xs"></i>
+          </div>
+          <div>
+            <p class="text-xs font-medium ${hasSisa ? 'text-green-700' : 'text-amber-700'}">Sisa Pengolahan</p>
+            <p class="text-[10px] text-slate-400">Data sisa makanan</p>
+          </div>
+        </div>
+        <div class="text-right">
+          ${hasSisa ? '<span class="badge badge-success badge-xs">Sudah diisi</span>' : '<span class="badge badge-warning badge-xs">Belum diisi</span>'}
+        </div>
+      </div>
+
+      <div class="flex items-center justify-between p-2 rounded-lg ${hasOmpreng ? 'bg-green-50' : 'bg-amber-50'} cursor-pointer hover:opacity-80 transition-all" onclick="window.goToPageWithAlert('ompreng', 'Sampah Ompreng')">
+        <div class="flex items-center gap-2">
+          <div class="w-6 h-6 rounded-full flex items-center justify-center ${hasOmpreng ? 'bg-green-500' : 'bg-amber-500'} text-white">
+            <i class="fas ${hasOmpreng ? 'fa-check' : 'fa-exclamation'} text-xs"></i>
+          </div>
+          <div>
+            <p class="text-xs font-medium ${hasOmpreng ? 'text-green-700' : 'text-amber-700'}">Sampah Ompreng</p>
+            <p class="text-[10px] text-slate-400">Data sampah dapur</p>
+          </div>
+        </div>
+        <div class="text-right">
+          ${hasOmpreng ? '<span class="badge badge-success badge-xs">Sudah diisi</span>' : '<span class="badge badge-warning badge-xs">Belum diisi</span>'}
+        </div>
+      </div>
+
+      <div class="mt-3 pt-2 border-t border-slate-100 text-center">
+        ${allCompleted ?
+          '<span class="badge badge-success gap-1"><i class="fas fa-check-circle"></i> Lengkap! Semua data sudah diisi hari ini</span>' :
+          '<span class="badge badge-warning gap-1"><i class="fas fa-clock"></i> Masih ada data yang belum diisi</span>'}
+      </div>
+    </div>
+  `;
 }
 
-// Fungsi navigasi ke halaman dengan alert
 window.goToPageWithAlert = function(page, dataName) {
-    if (typeof window.loadPage === 'function') {
-        window.loadPage(page);
-        showToast(`📝 Silakan isi data ${dataName} untuk hari ini`, 2000, 'info');
-    } else {
-        showToast(`Silakan buka halaman ${dataName} dari menu`, 2000);
-    }
+  if (typeof window.loadPage === 'function') {
+    window.loadPage(page);
+    showToast(`📝 Silakan isi data ${dataName} untuk hari ini`, 2000, 'info');
+  } else {
+    showToast(`Silakan buka halaman ${dataName} dari menu`, 2000);
+  }
 };
 
 // ============================================================
-// SECTION 15: DAILY REPORT MODAL
+// SECTION 15: DAILY REPORT & EXPORT
 // ============================================================
 window.showDailyReport = async function() {
   const modal = document.getElementById('reportModal');
   const reportContent = document.getElementById('reportContent');
-  
+
   if (!modal || !reportContent) return;
-  
+
   reportContent.innerHTML = `
     <div class="text-center py-4">
       <span class="loading loading-spinner loading-sm text-primary"></span>
@@ -1447,7 +1352,7 @@ window.showDailyReport = async function() {
     </div>
   `;
   modal.showModal();
-  
+
   try {
     const [stokSnap, sisaSnap, omprengSnap] = await Promise.all([get(stokRef), get(sisaPengRef), get(omprengRef)]);
     const stokData = stokSnap.val() || {};
@@ -1455,16 +1360,15 @@ window.showDailyReport = async function() {
     const todayDisplay = new Date().toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' });
     const todaySisa = Object.values(sisaSnap.val() || {}).find(d => d.tanggalISO === todayISO) || {};
     const todayOmpreng = Object.values(omprengSnap.val() || {}).find(d => d.tanggalISO === todayISO) || {};
-    
+
     const totalSisa = (todaySisa.pokok || 0) + (todaySisa.sayur || 0) + (todaySisa.laukpauk || 0) + (todaySisa.lauknabati || 0) + (todaySisa.buah || 0);
     const totalOmpreng = (todayOmpreng.pokok || 0) + (todayOmpreng.sayur || 0) + (todayOmpreng.laukpauk || 0) + (todayOmpreng.lauknabati || 0) + (todayOmpreng.buah || 0);
-    
+
     reportContent.innerHTML = `
       <div class="alert alert-info shadow-md py-2 text-sm">
         <i class="fas fa-calendar-day"></i>
         <span class="font-medium">Tanggal Laporan: ${todayDisplay}</span>
       </div>
-      
       <div class="bg-slate-50 rounded-lg p-3">
         <h4 class="font-semibold text-slate-700 flex items-center gap-2 mb-2 text-sm">
           <i class="fas fa-boxes text-primary"></i> Stok Operasional Saat Ini
@@ -1476,7 +1380,6 @@ window.showDailyReport = async function() {
           <div class="text-slate-500">Listrik:</div><div class="font-semibold">${stokData['LISTRIK']?.stok || 0} kWh</div>
         </div>
       </div>
-      
       <div class="bg-slate-50 rounded-lg p-3">
         <h4 class="font-semibold text-slate-700 flex items-center gap-2 mb-2 text-sm">
           <i class="fas fa-recycle text-primary"></i> Sisa Pengolahan
@@ -1490,7 +1393,6 @@ window.showDailyReport = async function() {
           <div class="border-t pt-1 mt-1 font-semibold text-primary">Total:</div><div class="border-t pt-1 mt-1 font-bold text-primary">${totalSisa} kg</div>
         </div>
       </div>
-      
       <div class="bg-slate-50 rounded-lg p-3">
         <h4 class="font-semibold text-slate-700 flex items-center gap-2 mb-2 text-sm">
           <i class="fas fa-trash-alt text-primary"></i> Sampah Ompreng
@@ -1504,7 +1406,6 @@ window.showDailyReport = async function() {
           <div class="border-t pt-1 mt-1 font-semibold text-primary">Total:</div><div class="border-t pt-1 mt-1 font-bold text-primary">${totalOmpreng} kg</div>
         </div>
       </div>
-      
       <div class="bg-slate-50 rounded-lg p-3">
         <h4 class="font-semibold text-slate-700 flex items-center gap-2 mb-2 text-sm">
           <i class="fas fa-sticky-note text-primary"></i> Catatan
@@ -1522,9 +1423,6 @@ window.showDailyReport = async function() {
 
 window.closeModal = () => document.getElementById('reportModal')?.close();
 
-// ============================================================
-// SECTION 16: EXPORT FUNCTIONS (LAPORAN HARIAN)
-// ============================================================
 window.exportToExcel = async function() {
   try {
     const [stokSnap, sisaSnap, omprengSnap] = await Promise.all([get(stokRef), get(sisaPengRef), get(omprengRef)]);
@@ -1532,7 +1430,7 @@ window.exportToExcel = async function() {
     const todayISO = getTodayISO();
     const todaySisa = Object.values(sisaSnap.val() || {}).find(d => d.tanggalISO === todayISO) || {};
     const todayOmpreng = Object.values(omprengSnap.val() || {}).find(d => d.tanggalISO === todayISO) || {};
-    
+
     const csvRows = [
       ['=== LAPORAN ASLAP ==='],
       [`Tanggal: ${new Date().toLocaleDateString('id-ID')}`], [],
@@ -1557,7 +1455,7 @@ window.exportToExcel = async function() {
       ['Lauk Nabati', todayOmpreng.lauknabati || 0],
       ['Buah/Susu', todayOmpreng.buah || 0]
     ];
-    
+
     const csvContent = csvRows.map(row => row.join(',')).join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -1566,7 +1464,7 @@ window.exportToExcel = async function() {
     a.download = `laporan_aslap_${todayISO}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-    
+
     showToast('✅ Data berhasil diexport ke CSV', 2000, 'success');
   } catch (error) {
     console.error('Export error:', error);
@@ -1575,179 +1473,174 @@ window.exportToExcel = async function() {
 };
 
 // ============================================================
-// SECTION 17: STOCK MANAGEMENT FUNCTIONS
+// SECTION 19: HELPER & TREND CHART
 // ============================================================
-export async function editListrik() {
-  const inputListrik = document.getElementById('inputListrik');
-  const nilaiBaru = parseFloat(inputListrik.value);
-  
-  if (isNaN(nilaiBaru) || nilaiBaru < 0) {
-    showToast('Masukkan jumlah yang valid!', 3000, 'error');
+async function initTrendChart() {
+  const snapshot = await get(stokRef);
+  const stokData = snapshot.val() || {};
+
+  const currentStok = {
+    lpg50: stokData['GAS_LPG_50KG']?.stok || 0,
+    galon: stokData['GALON_AIR']?.stok || 0,
+    listrik: stokData['LISTRIK']?.stok || 0
+  };
+
+  const labels = [];
+  for (let i = currentChartDays - 1; i >= 0; i--) {
+    const date = new Date();
+    date.setDate(date.getDate() - i);
+    labels.push(date.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric' }));
+  }
+
+  const datasets = [
+    {
+      label: 'LPG 50kg',
+      data: labels.map((_, idx) => Math.max(0, currentStok.lpg50 - (currentChartDays - 1 - idx) * DAILY_USAGE.GAS_LPG_50KG)),
+      borderColor: '#1e3a5f',
+      backgroundColor: 'rgba(30, 58, 95, 0.1)',
+      tension: 0.4,
+      fill: true
+    },
+    {
+      label: 'Galon Air',
+      data: labels.map((_, idx) => Math.max(0, currentStok.galon - (currentChartDays - 1 - idx) * DAILY_USAGE.GALON_AIR)),
+      borderColor: '#2c5282',
+      backgroundColor: 'rgba(44, 82, 130, 0.1)',
+      tension: 0.4,
+      fill: true
+    },
+    {
+      label: 'Listrik (kWh)',
+      data: labels.map((_, idx) => Math.max(0, currentStok.listrik - (currentChartDays - 1 - idx) * DAILY_USAGE.LISTRIK)),
+      borderColor: '#3182ce',
+      backgroundColor: 'rgba(49, 130, 206, 0.1)',
+      tension: 0.4,
+      fill: true
+    }
+  ];
+
+  const ctx = document.getElementById('trendChart');
+  if (ctx) {
+    if (chartTrend) chartTrend.destroy();
+    chartTrend = new Chart(ctx, {
+      type: 'line',
+      data: { labels, datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+          legend: { position: 'bottom', labels: { font: { size: 9 } } },
+          tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.raw.toFixed(1)} unit` } }
+        },
+        scales: {
+          y: { beginAtZero: true, ticks: { font: { size: 9 } }, title: { display: true, text: 'Jumlah', font: { size: 9 } } },
+          x: { ticks: { font: { size: 9, rotation: 45, maxRotation: 45 } } }
+        }
+      }
+    });
+  }
+}
+
+window.changeChartDays = function() {
+  const select = document.getElementById('chartFilterDays');
+  const customDiv = document.getElementById('customDateRange');
+  const value = select.value;
+
+  if (value === 'custom') {
+    customDiv.classList.remove('hidden');
+  } else {
+    customDiv.classList.add('hidden');
+    currentChartDays = parseInt(value);
+    initTrendChart();
+  }
+};
+
+window.applyCustomDate = function() {
+  const startDate = document.getElementById('startDate').value;
+  const endDate = document.getElementById('endDate').value;
+
+  if (!startDate || !endDate) {
+    showToast('Pilih kedua tanggal!', 2000, 'error');
     return;
   }
-  
-  try {
-    await set(ref(db, 'stok_operasional/LISTRIK'), { nama: "LISTRIK", stok: nilaiBaru });
 
-    // === SIMPAN RIWAYAT KE FIREBASE (BARU) ===
-    const stokLama = document.getElementById('listrik').textContent || 0;
-    saveChangeToHistory('Update Listrik', 'Listrik', stokLama, nilaiBaru);
-    // =========================================
-    document.getElementById('listrik').textContent = nilaiBaru;
-    inputListrik.value = '';
-    showToast(`⚡ Listrik diupdate menjadi ${nilaiBaru} kWh`, 2000, 'success');
-    updateTimestamp();
-    updateStockPrediction();
-  } catch (error) {
-    console.error("Error update listrik:", error);
-    showToast('Gagal mengupdate listrik!', 3000, 'error');
-  }
-}
+  chartStartDate = new Date(startDate);
+  chartEndDate = new Date(endDate);
 
-export async function editStok(namaKey, perubahan) {
-  try {
-    const snapshot = await get(ref(db, 'stok_operasional/' + namaKey));
-    let stokSekarang = snapshot.exists() ? snapshot.val().stok || 0 : 0;
-    let namaAsli = snapshot.exists() ? snapshot.val().nama : namaKey.replace(/_/g, ' ');
-    const stokBaru = Math.max(0, stokSekarang + perubahan);
-    
-        await set(ref(db, 'stok_operasional/' + namaKey), { nama: namaAsli, stok: stokBaru });
-
-    // === SIMPAN RIWAYAT KE FIREBASE (BARU) ===
-    const action = perubahan > 0 ? 'Penambahan Stok' : 'Pengurangan Stok';
-    saveChangeToHistory(action, namaAsli, stokSekarang, stokBaru);
-    // =========================================
-
-    const elementId = namaKey === "GAS_LPG_50KG" ? "lpg50" : namaKey === "GAS_LPG_12KG" ? "lpg12" : "galon";
-    const element = document.getElementById(elementId);
-    if (element) element.textContent = stokBaru;
-    
-    const perubahanText = perubahan > 0 ? `+${perubahan}` : perubahan;
-    showToast(`${namaAsli}: ${perubahanText} → Stok sekarang ${stokBaru}`, 2000);
-    updateTimestamp();
-    updateStockPrediction();
-  } catch (error) {
-    console.error("Error update stok:", error);
-    showToast('Gagal mengupdate stok!', 3000, 'error');
-  }
-}
-
+  const diffTime = Math.abs(chartEndDate - chartStartDate);
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+  currentChartDays = diffDays;
+  initTrendChart();
+};
 // ============================================================
-// SECTION 18: NOTIFICATION FUNCTIONS
+// RIWAYAT PERUBAHAN (Menggunakan activity_logs dari semua halaman)
 // ============================================================
-function checkBrowserNotification() {
-  if ('Notification' in window && Notification.permission === 'default') {
-    Notification.requestPermission();
-  }
-}
-
-function sendBrowserNotification(title, body) {
-  if ('Notification' in window && Notification.permission === 'granted') {
-    new Notification(title, { body, icon: '/favicon.ico' });
-  }
-}
-
-// ============================================================
-// SECTION 19: HELPER FUNCTIONS
-// ============================================================
-function updateTimestamp() {
-  const timestampEl = document.getElementById('lastUpdate');
-  if (timestampEl) {
-    timestampEl.innerHTML = `<i class="far fa-clock"></i> Terakhir update: ${new Date().toLocaleTimeString('id-ID')}`;
-  }
-}
-// ============================================================
-// SECTION 20: RIWAYAT PERUBAHAN FIREBASE + FILTER TANGGAL
-// ============================================================
-
-// Load riwayat dari Firebase (real-time)
 function loadHistoryFromFirebase() {
-  onValue(historyRef, (snapshot) => {
-    const data = snapshot.val() || {};
-    changeHistory = Object.values(data)
-      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)); // terbaru dulu
+  const logsRef = ref(db, 'activity_logs');
 
-    renderHistoryTimeline(); // render dengan filter saat ini
+  onValue(logsRef, (snapshot) => {
+    const data = snapshot.val() || {};
+    
+    // Hanya ambil yang module = "stok"
+    changeHistory = Object.values(data)
+      .filter(log => log.module === "stok")
+      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+    renderHistoryTimeline();
   });
 }
 
-// Simpan perubahan ke Firebase
-function saveChangeToHistory(action, itemName, oldValue, newValue, changedBy = "Admin") {
-  const historyItem = {
-    id: Date.now(),
-    timestamp: new Date().toISOString(),
-    tanggalISO: getTodayISO(),           // untuk filter cepat
-    action: action,
-    item: itemName,
-    oldValue: Number(oldValue),
-    newValue: Number(newValue),
-    diff: Number(newValue) - Number(oldValue),
-    changedBy: changedBy
-  };
-
-  push(historyRef, historyItem); // push otomatis buat unique key
-}
-
-// Render Timeline Daisy UI
 function renderHistoryTimeline() {
   const container = document.getElementById('historyTimeline');
   if (!container) return;
 
-  // Filter berdasarkan tanggal yang dipilih
   let filtered = changeHistory;
   if (currentFilterDate) {
-    filtered = changeHistory.filter(item => 
-      item.tanggalISO === currentFilterDate
-    );
+    filtered = changeHistory.filter(item => item.timestamp.startsWith(currentFilterDate));
   }
 
   if (filtered.length === 0) {
     container.innerHTML = `
       <div class="text-center py-12 text-slate-400">
         <i class="fas fa-history text-4xl mb-3 opacity-30"></i>
-        <p class="text-sm">Belum ada riwayat perubahan${currentFilterDate ? ' pada tanggal ini' : ''}</p>
+        <p class="text-sm">Belum ada riwayat perubahan stok</p>
       </div>`;
     return;
   }
 
-  let html = `<ul class="timeline timeline-vertical timeline-compact">`;
+  let html = `<div class="space-y-4">`;
 
-  filtered.forEach((item, index) => {
+  filtered.forEach(item => {
     const date = new Date(item.timestamp);
     const timeStr = date.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
     const dateStr = date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
 
-    const isPositive = item.diff > 0;
-    const diffText = item.diff > 0 ? `+${item.diff}` : item.diff;
-
     html += `
-      <li>
-        ${index !== 0 ? '<hr class="bg-slate-200">' : ''}
-        <div class="timeline-start text-xs text-slate-500">${dateStr}<br>${timeStr}</div>
-        <div class="timeline-middle">
-          <div class="w-5 h-5 rounded-full border-2 border-primary bg-white flex items-center justify-center text-[10px]">
-            <i class="fas fa-${isPositive ? 'plus' : 'minus'} text-primary"></i>
-          </div>
+      <div class="flex gap-4 bg-slate-50 p-4 rounded-xl border border-slate-100">
+        <div class="text-right w-20 text-xs text-slate-500 flex-shrink-0">
+          ${dateStr}<br>
+          <span class="font-medium">${timeStr}</span>
         </div>
-        <div class="timeline-end">
-          <div class="text-sm font-medium">${escapeHtml(item.item)}</div>
-          <div class="text-xs text-slate-500">${item.action}</div>
-          <div class="text-xs mt-1">
-            ${item.oldValue} → 
-            <span class="font-semibold ${isPositive ? 'text-success' : 'text-error'}">
-              ${item.newValue}
+        <div class="flex-1">
+          <div class="flex items-center gap-2">
+            <span class="badge badge-sm ${item.action === 'create' ? 'badge-success' : 'badge-info'}">
+              ${item.action.toUpperCase()}
             </span>
-            <span class="ml-1 text-[10px] ${isPositive ? 'text-success' : 'text-error'}">(${diffText})</span>
+            <span class="font-medium text-slate-700">${escapeHtml(item.description)}</span>
+          </div>
+          <div class="text-xs text-slate-500 mt-1 flex items-center gap-1">
+            <i class="fas fa-user"></i>
+            Oleh: <strong>${item.user?.name || 'Unknown'}</strong>
           </div>
         </div>
-      </li>`;
+      </div>`;
   });
 
-  html += `</ul>`;
+  html += `</div>`;
   container.innerHTML = html;
 }
 
-// Filter functions (dipanggil dari button HTML)
+// Filter functions
 window.filterHistoryByDate = function() {
   const input = document.getElementById('historyDateFilter').value;
   currentFilterDate = input ? input : null;
@@ -1761,8 +1654,17 @@ window.showAllHistory = function() {
 };
 
 window.clearHistory = async function() {
-  if (confirm('⚠️ Hapus SEMUA riwayat perubahan di Firebase?\nTindakan ini tidak dapat dibatalkan!')) {
-    await set(historyRef, null);
+  if (confirm('⚠️ Hapus SEMUA riwayat perubahan?\nTindakan ini tidak dapat dibatalkan!')) {
+    await set(ref(db, 'activity_logs'), null);
     showToast('Riwayat berhasil dihapus', 2000, 'success');
   }
 };
+
+// ============================================================
+// JALANKAN SAAT HALAMAN DIMUAT
+// ============================================================
+document.addEventListener('DOMContentLoaded', () => {
+  initializePage().then(() => {
+    initDashboard();
+  });
+});

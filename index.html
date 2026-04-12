@@ -111,6 +111,17 @@
     }
   </style>
 </head>
+<script type="module">
+  import { initAuthGuard } from './js/auth-guard.js';
+  
+  // Cek login saat index.html dibuka
+  initAuthGuard().then(isLoggedIn => {
+    if (isLoggedIn) {
+      // Load halaman default (dashboard)
+      showPage('dashboard');
+    }
+  });
+</script>
 <body class="font-['Inter'] bg-[#F0F4F8] h-screen overflow-hidden">
   
   <div class="flex h-full overflow-hidden">
@@ -208,12 +219,17 @@
       </div>
       
       <!-- Sidebar Footer -->
+       
       <div class="px-6 py-5 border-t border-white/15 mt-auto">
-        <div class="flex items-center gap-2.5 mb-2">
-          <i class="fas fa-user-circle text-xl text-white/70"></i>
-          <span class="text-xs font-medium text-white/80">Dimas Rahmat</span>
-        </div>
         <p class="text-[10px] text-white/40">© 2026 DAPUR 2 MANCILAN JOMBANG</p>
+        <!-- Di dalam sidebar footer, sebelum </div> -->
+<div class="mt-4 pt-4 border-t border-white/15">
+  <button onclick="logout()" 
+          class="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-red-300 hover:bg-white/10 hover:text-red-400 rounded-xl transition-all">
+    <i class="fas fa-sign-out-alt"></i>
+    <span>Keluar</span>
+  </button>
+</div>
       </div>
     </aside>
 

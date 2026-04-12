@@ -3,7 +3,7 @@
 // ============================================================
 import { db } from "./firebase-init.js";
 import { loadDashboard, initDashboard, editListrik, editStok } from "./dashboard.js";
-import { loadStokPage, initStok, setCurrentPage } from "./stok.js";
+import { loadStokPage, initStok,} from "./stok.js";
 import { loadSisaPengolahanPage, initSisaPengolahan } from "./sisa-pengolahan.js";
 import { loadSampahOmprengPage, initSampahOmpreng } from "./sampah-ompreng.js";
 import { loadAbsensiPage, initAbsensi } from "./absensi.js";

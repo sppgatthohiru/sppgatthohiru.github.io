@@ -4,7 +4,12 @@
 import { push, onValue, ref, query, orderByChild, equalTo } from "https://www.gstatic.com/firebasejs/11.7.0/firebase-database.js";
 import { db, sisaPengRef } from "./firebase-init.js";
 import { showToast, escapeHtml } from "./utils.js";
+import { initAuthGuard } from './auth-guard.js';
 
+async function initializePage() {
+  const isLoggedIn = await initAuthGuard();
+  if (!isLoggedIn) return;   // otomatis redirect ke login jika belum login
+}
 // ============================================================
 // LOAD PAGE HTML
 // ============================================================

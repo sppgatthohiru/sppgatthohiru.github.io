@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login - ASLAP MBG Tracker</title>
+  
+  <!-- Tailwind + DaisyUI -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.10/dist/full.css" rel="stylesheet" type="text/css" />
+  
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
+  
+  <!-- Google Fonts Inter -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+    }
+    .login-gradient {
+      background: linear-gradient(135deg, #1E3A5F 0%, #2563EB 100%);
+    }
+  </style>
+</head>
+<body class="bg-gray-50 min-h-screen flex items-center justify-center">
+
+  <div class="max-w-md w-full mx-4">
+    <div class="card bg-white shadow-2xl border border-gray-100">
+      <div class="card-body p-8">
+        
+        <!-- Logo & Header -->
+        <div class="flex flex-col items-center mb-8">
+          <div class="w-16 h-16 bg-[#1E3A5F] rounded-2xl flex items-center justify-center mb-4 shadow-inner">
+            <i class="fas fa-utensils text-white text-4xl"></i>
+          </div>
+          <h1 class="text-3xl font-bold tracking-tight text-[#1E3A5F]">ASLAP MBG</h1>
+          <p class="text-gray-500 mt-1">Sistem Manajemen Dapur</p>
+        </div>
+
+        <h2 class="text-xl font-semibold text-center mb-6 text-gray-800">Masuk ke Akun Anda</h2>
+
+        <!-- Login Form -->
+        <form id="loginForm" class="space-y-5">
+          <div class="form-control">
+            <label class="label">
+              <span class="label-text font-medium text-gray-700">Email</span>
+            </label>
+            <input 
+              type="email" 
+              id="email" 
+              class="input input-bordered w-full focus:border-blue-600" 
+              placeholder="nama@aslappmbg.com" 
+              required 
+              autocomplete="email">
+          </div>
+
+          <div class="form-control">
+            <label class="label">
+              <span class="label-text font-medium text-gray-700">Password</span>
+            </label>
+            <input 
+              type="password" 
+              id="password" 
+              class="input input-bordered w-full focus:border-blue-600" 
+              placeholder="••••••••" 
+              required 
+              autocomplete="current-password">
+          </div>
+
+          <div class="flex items-center justify-between text-sm">
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" class="checkbox checkbox-sm" checked>
+              <span class="text-gray-600">Ingat saya</span>
+            </label>
+            <a href="#" onclick="alert('Hubungi admin untuk reset password')" 
+               class="text-blue-600 hover:underline">Lupa password?</a>
+          </div>
+
+          <button 
+            type="submit" 
+            id="btnLogin"
+            class="btn btn-primary w-full py-3 text-base font-semibold shadow-md">
+            <i class="fas fa-sign-in-alt mr-2"></i>
+            MASUK
+          </button>
+        </form>
+
+        <!-- Info -->
+        <div class="mt-8 text-center text-xs text-gray-500">
+          © 2026 DAPUR 2 MANCILAN JOMBANG<br>
+          Hanya untuk relawan dan admin internal
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Firebase SDK + Login Logic -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.7.0/firebase-app.js";
+    import { getAuth, signInWithEmailAndPassword, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.7.0/firebase-auth.js";
+
+    // ================== GANTI DENGAN CONFIG FIREBASE ANDA ==================
+    const firebaseConfig = {
+  apiKey: "AIzaSyBgqd4Va35imJ51tPBPo58nTWm1kyTFhWQ",
+  authDomain: "aslap-mbg-tracker.firebaseapp.com",
+  databaseURL: "https://aslap-mbg-tracker-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "aslap-mbg-tracker",
+  storageBucket: "aslap-mbg-tracker.firebasestorage.app",
+  messagingSenderId: "669913277699",
+  appId: "1:669913277699:web:a303f7053269cb9c91f536",
+  measurementId: "G-SQP2X21ZVZ"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+
+    // Cek apakah sudah login (jika ya, langsung ke index.html)
+    onAuthStateChanged(auth, (user) => {
+      if (user) {
+        window.location.href = 'index.html';
+      }
+    });
+
+    // Handle Login Form
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+      const btnLogin = document.getElementById('btnLogin');
+
+      // Disable button + loading
+      btnLogin.disabled = true;
+      btnLogin.innerHTML = `
+        <span class="loading loading-spinner loading-sm mr-2"></span>
+        Memverifikasi...
+      `;
+
+      try {
+        const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        const user = userCredential.user;
+
+        // Simpan informasi user sementara
+        localStorage.setItem('currentUser', JSON.stringify({
+          uid: user.uid,
+          email: user.email,
+          name: user.displayName || email.split('@')[0],
+          lastLogin: new Date().toISOString()
+        }));
+
+        // Redirect ke halaman utama
+        window.location.href = 'index.html';
+
+      } catch (error) {
+        console.error("Login error:", error.code);
+        
+        let message = "Login gagal. Silakan coba lagi.";
+        
+        switch (error.code) {
+          case 'auth/user-not-found':
+          case 'auth/wrong-password':
+            message = "Email atau password salah.";
+            break;
+          case 'auth/invalid-email':
+            message = "Format email tidak valid.";
+            break;
+          case 'auth/too-many-requests':
+            message = "Terlalu banyak percobaan. Coba lagi nanti.";
+            break;
+        }
+        
+        alert(message);
+      } finally {
+        btnLogin.disabled = false;
+        btnLogin.innerHTML = `<i class="fas fa-sign-in-alt mr-2"></i> MASUK`;
+      }
+    });
+  </script>
+</body>
+</html>

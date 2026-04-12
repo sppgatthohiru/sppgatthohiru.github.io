@@ -1,7 +1,8 @@
 // ============================================================
-// UTILS.JS - Utility Functions
+// UTILS.JS - Utility Functions for ASLAP MBG Tracker
 // ============================================================
 import { db } from "./firebase-init.js";
+import { ref, push } from "https://www.gstatic.com/firebasejs/11.7.0/firebase-database.js";
 
 // ============================================================
 // TOAST NOTIFICATION (menggunakan DaisyUI)
@@ -9,7 +10,6 @@ import { db } from "./firebase-init.js";
 let toastContainer = null;
 
 export function showToast(message, duration = 3000, type = 'success') {
-  // Create toast container if not exists
   if (!toastContainer) {
     toastContainer = document.createElement('div');
     toastContainer.id = 'toastContainer';
@@ -17,7 +17,6 @@ export function showToast(message, duration = 3000, type = 'success') {
     document.body.appendChild(toastContainer);
   }
   
-  // Determine alert class based on type
   let alertClass = 'alert-success';
   let icon = 'fa-check-circle';
   
@@ -39,7 +38,6 @@ export function showToast(message, duration = 3000, type = 'success') {
       icon = 'fa-check-circle';
   }
   
-  // Create toast element
   const toast = document.createElement('div');
   toast.className = `alert ${alertClass} shadow-lg animate-fadeIn`;
   toast.innerHTML = `
@@ -51,13 +49,44 @@ export function showToast(message, duration = 3000, type = 'success') {
   
   toastContainer.appendChild(toast);
   
-  // Auto remove after duration
   setTimeout(() => {
     toast.classList.add('opacity-0', 'transition-opacity', 'duration-300');
     setTimeout(() => {
       if (toast.parentNode) toast.remove();
     }, 300);
   }, duration);
+}
+
+// ============================================================
+// LOG ACTIVITY - Audit Trail (SIAPA yang mengubah apa)
+// ============================================================
+export async function logActivity(action, module, description, oldData = null, newData = null) {
+  if (!window.currentUser) {
+    console.warn("⚠️ logActivity: Tidak ada user yang login");
+    return;
+  }
+
+  const logEntry = {
+    timestamp: new Date().toISOString(),
+    user: {
+      uid: window.currentUser.uid,
+      name: window.currentUser.name,
+      email: window.currentUser.email || ''
+    },
+    action: action,           // "create", "update", "delete"
+    module: module,           // "stok", "sisa_pengolahan", "absensi", "ompreng", dll
+    description: description,
+    oldData: oldData ? deepClone(oldData) : null,
+    newData: newData ? deepClone(newData) : null
+  };
+
+  try {
+    const logsRef = ref(db, 'activity_logs');
+    await push(logsRef, logEntry);
+    console.log(`✅ Log tersimpan → ${action} | ${module} | ${description}`);
+  } catch (error) {
+    console.error("❌ Gagal menyimpan log aktivitas:", error);
+  }
 }
 
 // ============================================================
@@ -86,9 +115,7 @@ export function formatDate(date, format = 'full') {
 // ============================================================
 export function getTodayISO() {
   const now = new Date();
-  
-  // Konversi ke waktu lokal dengan benar
-  const offset = now.getTimezoneOffset() * 60000; // offset dalam milidetik
+  const offset = now.getTimezoneOffset() * 60000;
   const localTime = new Date(now.getTime() - offset);
   
   const year = localTime.getUTCFullYear();
@@ -137,7 +164,7 @@ export function isValidPhone(phone) {
 }
 
 // ============================================================
-// DEBOUNCE FUNCTION (untuk search input)
+// DEBOUNCE FUNCTION
 // ============================================================
 export function debounce(func, wait) {
   let timeout;
@@ -152,7 +179,7 @@ export function debounce(func, wait) {
 }
 
 // ============================================================
-// THROTTLE FUNCTION (untuk scroll events)
+// THROTTLE FUNCTION
 // ============================================================
 export function throttle(func, limit) {
   let inThrottle;
@@ -166,9 +193,10 @@ export function throttle(func, limit) {
 }
 
 // ============================================================
-// DEEP CLONE OBJECT
+// DEEP CLONE OBJECT (digunakan di logActivity)
 // ============================================================
 export function deepClone(obj) {
+  if (obj === null || typeof obj !== 'object') return obj;
   return JSON.parse(JSON.stringify(obj));
 }
 
@@ -182,7 +210,7 @@ export function generateId(prefix = '') {
 }
 
 // ============================================================
-// DOWNLOAD FILE (CSV/Excel)
+// DOWNLOAD FILE
 // ============================================================
 export function downloadFile(data, filename, type = 'text/csv') {
   const blob = new Blob([data], { type: `${type};charset=utf-8;` });
@@ -220,7 +248,7 @@ export function escapeHtml(text) {
 }
 
 // ============================================================
-// TRUNCATE TEXT (dengan ellipsis)
+// TRUNCATE TEXT
 // ============================================================
 export function truncateText(text, maxLength = 50) {
   if (!text || text.length <= maxLength) return text;
@@ -228,7 +256,7 @@ export function truncateText(text, maxLength = 50) {
 }
 
 // ============================================================
-// GET RELATIVE TIME (misal: "2 jam yang lalu")
+// GET RELATIVE TIME
 // ============================================================
 export function getRelativeTime(dateString) {
   const date = new Date(dateString);
@@ -244,7 +272,7 @@ export function getRelativeTime(dateString) {
 }
 
 // ============================================================
-// EXPORT KE WINDOW (untuk akses global jika diperlukan)
+// EXPORT KE WINDOW (Global Access)
 // ============================================================
 if (typeof window !== 'undefined') {
   window.showToast = showToast;
@@ -254,4 +282,30 @@ if (typeof window !== 'undefined') {
   window.formatRupiah = formatRupiah;
   window.escapeHtml = escapeHtml;
   window.copyToClipboard = copyToClipboard;
+  window.logActivity = logActivity;        // ← Tambahan penting
+}
+
+// ============================================================
+// GLOBAL LOG ACTIVITY HELPER - BISA DIPANGGIL DARI SEMUA HALAMAN
+// ============================================================
+export async function saveChangeToHistory(action, itemName, oldValue, newValue) {
+  if (!window.currentUser) {
+    console.warn("Tidak ada user login untuk mencatat riwayat");
+    return;
+  }
+
+  const description = `${action}: ${itemName} dari ${oldValue} menjadi ${newValue}`;
+
+  await logActivity(
+    action.includes("Penambahan") || action.includes("Tambah") || action.includes("Create") ? "create" : "update",
+    "stok",
+    description,
+    { nama: itemName, stok: Number(oldValue) || 0 },
+    { nama: itemName, stok: Number(newValue) || 0 }
+  );
+}
+
+// Export ke window
+if (typeof window !== 'undefined') {
+  window.saveChangeToHistory = saveChangeToHistory;
 }
