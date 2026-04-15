@@ -6,12 +6,14 @@ import { getAuth } from "https://www.gstatic.com/firebasejs/11.7.0/firebase-auth
 import { getDatabase, ref } from "https://www.gstatic.com/firebasejs/11.7.0/firebase-database.js";
 import { firebaseConfig } from "./config.js";
 
+
 // ============================================================
 // INITIALIZE FIREBASE
 // ============================================================
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getDatabase(app);
+export const relawanRef = ref(db, 'relawanDivisi');
 
 // ============================================================
 // DATABASE REFERENCES
