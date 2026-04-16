@@ -15,7 +15,9 @@ export function showToast(message, duration = 3000, type = 'success') {
     toastContainer.id = 'toastContainer';
     toastContainer.className = 'toast toast-top toast-end z-[100]';
     document.body.appendChild(toastContainer);
+    
   }
+  
   
   let alertClass = 'alert-success';
   let icon = 'fa-check-circle';
@@ -303,6 +305,16 @@ export async function saveChangeToHistory(action, itemName, oldValue, newValue) 
     { nama: itemName, stok: Number(oldValue) || 0 },
     { nama: itemName, stok: Number(newValue) || 0 }
   );
+}
+
+export function escapeJsString(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/"/g, '\\"')
+    .replace(/\n/g, '\\n')
+    .replace(/\r/g, '\\r');
 }
 
 // Export ke window

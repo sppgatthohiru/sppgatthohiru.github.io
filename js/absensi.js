@@ -3,7 +3,7 @@
 // ============================================================
 import { ref, onValue, push, set, get, remove } from "https://www.gstatic.com/firebasejs/11.7.0/firebase-database.js";
 import { db, absensiRef } from "./firebase-init.js";
-import { showToast, escapeHtml } from "./utils.js";
+import { showToast, escapeHtml, escapeJsString } from "./utils.js";
 
 const relawanRef = ref(db, 'relawanDivisi');
 let daftarRelawanDivisi = {};
@@ -75,7 +75,7 @@ export function initAbsensi() {
 }
 
 // ============================================================
-// LOAD TABEL ABSENSI
+// LOAD TABEL ABSENSI (SUDAH DIPERBAIKI)
 // ============================================================
 window.loadAbsensiTabel = async function() {
   const startStr = document.getElementById('startDate').value;
@@ -149,7 +149,7 @@ window.loadAbsensiTabel = async function() {
   urutanDivisi.forEach(divisi => {
     const anggota = daftarRelawanDivisi[divisi] || [];
     anggota.forEach(nama => {
-      const safeNama = encodeURIComponent(nama);
+      const safeNama = escapeJsString(nama);   // ← Perbaikan utama
 
       html += `
         <tr class="border-b hover:bg-slate-50">
@@ -160,7 +160,7 @@ window.loadAbsensiTabel = async function() {
             ${escapeHtml(nama)}
           </td>
           
-          <td onclick="window.editDivisi('${safeNama}', '${escapeHtml(divisi)}', this)" 
+          <td onclick="window.editDivisi('${safeNama}', '${escapeJsString(divisi)}', this)" 
               class="sticky left-[210px] bg-white px-4 py-4 border-r text-slate-600 text-xs cursor-pointer hover:bg-amber-50">
             ${escapeHtml(divisi)}
           </td>
@@ -197,14 +197,12 @@ window.markAllHadir = async function(tanggal) {
   const snapshot = await get(absensiRef);
   const data = snapshot.val() || {};
 
-  // Hapus semua absensi lama untuk tanggal ini
   Object.entries(data).forEach(([key, val]) => {
     if (val.tanggalISO === tanggal) {
       remove(ref(db, 'absensi/' + key));
     }
   });
 
-  // Simpan semua sebagai Hadir
   const promises = [];
   Object.keys(daftarRelawanDivisi).forEach(divisi => {
     const anggota = daftarRelawanDivisi[divisi] || [];
@@ -226,10 +224,11 @@ window.markAllHadir = async function(tanggal) {
 };
 
 // ============================================================
-// TOGGLE ABSEN + AUTO SAVE
+// TOGGLE ABSEN + AUTO SAVE (SUDAH DIPERBAIKI)
 // ============================================================
 window.toggleAbsen = async function(safeNama, tanggal, cell) {
-  const nama = decodeURIComponent(safeNama);
+  const nama = safeNama;                    // Tidak perlu decode lagi
+
   const current = cell.textContent.trim();
   let newStatus = '';
 
@@ -274,10 +273,10 @@ window.toggleAbsen = async function(safeNama, tanggal, cell) {
 };
 
 // ============================================================
-// EDIT NAMA & DIVISI (Klik pada kolom)
+// EDIT NAMA & DIVISI (SUDAH DIPERBAIKI)
 // ============================================================
 window.editNama = function(safeNama, cell) {
-  const namaLama = decodeURIComponent(safeNama);
+  const namaLama = safeNama;
   const namaBaru = prompt("Ganti nama relawan:", namaLama);
   if (!namaBaru || namaBaru.trim() === namaLama || namaBaru.trim() === "") return;
 
@@ -294,7 +293,7 @@ window.editNama = function(safeNama, cell) {
 };
 
 window.editDivisi = function(safeNama, divisiLama, cell) {
-  const nama = decodeURIComponent(safeNama);
+  const nama = safeNama;
   const divisiBaru = prompt(`Pindahkan "${nama}" ke divisi baru:`, divisiLama);
   if (!divisiBaru || divisiBaru.trim() === divisiLama || divisiBaru.trim() === "") return;
 
@@ -316,7 +315,7 @@ window.editDivisi = function(safeNama, divisiLama, cell) {
 };
 
 // ============================================================
-// MODAL KELOLA RELAWAN
+// MODAL KELOLA RELAWAN (SUDAH DIPERBAIKI)
 // ============================================================
 window.tambahRelawanModal = function() {
   const modalHTML = `
@@ -367,13 +366,16 @@ window.renderListModal = function() {
     `;
 
     anggota.forEach(nama => {
+      const safeDivisi = escapeJsString(divisi);
+      const safeNama = escapeJsString(nama);
+
       html += `
         <div class="flex justify-between items-center bg-white p-3 rounded-2xl border border-slate-100 hover:border-primary transition-colors">
           <span class="font-medium text-slate-700">${escapeHtml(nama)}</span>
           <div class="flex gap-2">
-            <button onclick="window.pindahRelawan('${escapeHtml(divisi)}','${escapeHtml(nama)}')" 
+            <button onclick="window.pindahRelawan('${safeDivisi}','${safeNama}')" 
                     class="btn btn-xs btn-outline btn-primary">Pindah</button>
-            <button onclick="window.hapusRelawan('${escapeHtml(divisi)}','${escapeHtml(nama)}')" 
+            <button onclick="window.hapusRelawan('${safeDivisi}','${safeNama}')" 
                     class="btn btn-xs btn-error">Hapus</button>
           </div>
         </div>`;
@@ -428,7 +430,7 @@ window.pindahRelawan = async function(divisiLama, nama) {
 };
 
 // ============================================================
-// EXPORT TO PDF - VERSI PROFESIONAL
+// EXPORT TO PDF (Tidak berubah)
 // ============================================================
 window.exportToPDF = async function() {
   const startStr = document.getElementById('startDate').value;
@@ -450,7 +452,6 @@ window.exportToPDF = async function() {
   const title = "LAPORAN ABSENSI RELAWAN";
   const periode = `Periode: ${startStr} s/d ${endStr}`;
 
-  // Header gelap elegan
   doc.setFillColor(15, 23, 42);
   doc.rect(0, 0, pageWidth, 85, "F");
 
@@ -463,7 +464,6 @@ window.exportToPDF = async function() {
   doc.setFont("helvetica", "normal");
   doc.text(periode, pageWidth / 2, 68, { align: "center" });
 
-  // Ambil data absensi
   const snapshot = await get(absensiRef);
   const allAbsen = snapshot.val() || {};
   const absenMap = {};
@@ -479,7 +479,6 @@ window.exportToPDF = async function() {
     dates.push(d.toISOString().slice(0, 10));
   }
 
-  // Buat data tabel PDF
   const tableData = [];
   let grandTotalHadir = 0;
   let grandTotalTidakHadir = 0;
@@ -510,10 +509,8 @@ window.exportToPDF = async function() {
     });
   });
 
-  // Header kolom
   const columns = ["Nama Relawan", "Divisi", ...dates.map(d => d.slice(5)), "Total Hadir", "Total Tidak Hadir"];
 
-  // Generate tabel
   doc.autoTable({
     head: [columns],
     body: tableData,
@@ -538,7 +535,6 @@ window.exportToPDF = async function() {
     margin: { top: 110, left: 30, right: 30 }
   });
 
-  // Ringkasan
   const finalY = doc.lastAutoTable.finalY + 35;
 
   doc.setDrawColor(226, 232, 240);
@@ -554,7 +550,6 @@ window.exportToPDF = async function() {
   doc.text(`Total Kehadiran        : ${grandTotalHadir} hari`, 30, finalY + 48);
   doc.text(`Total Ketidakhadiran   : ${grandTotalTidakHadir} hari`, 30, finalY + 66);
 
-  // Footer
   const todayDate = new Date().toLocaleDateString('id-ID', { 
     day: 'numeric', month: 'long', year: 'numeric' 
   });
@@ -563,7 +558,6 @@ window.exportToPDF = async function() {
   doc.setTextColor(100);
   doc.text(`Dicetak pada: ${todayDate}`, pageWidth - 30, doc.internal.pageSize.getHeight() - 30, { align: "right" });
 
-  // Simpan file
   const filename = `Laporan_Absensi_Relawan_${startStr}_sd_${endStr}.pdf`;
   doc.save(filename);
 
